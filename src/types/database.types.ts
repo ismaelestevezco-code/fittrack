@@ -14,6 +14,7 @@ export interface ProfileRow {
   units: 'metric' | 'imperial';
   weighing_mode: 'daily' | 'weekly' | 'monthly';
   weighing_days: string; // JSON e.g. "[1,4]" for Mon+Thu, "[15]" for 15th of month, "[]" for daily
+  measurement_frequency: 'weekly' | 'monthly';
   avatar_uri: string | null;
   created_at: number;
   updated_at: number;

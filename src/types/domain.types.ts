@@ -31,4 +31,5 @@ export interface ExerciseProgressPoint {
   maxWeightKg: number;
   totalVolumeKg: number;
   totalReps: number;
+  estimatedOneRM: number;
 }

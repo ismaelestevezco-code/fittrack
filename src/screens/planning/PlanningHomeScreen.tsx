@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RecommendationCard } from '@/components/planning/RecommendationCard';
 import { EmptyState } from '@/components/common/EmptyState';
+import { PremiumGate } from '@/components/common/PremiumGate';
 import { Button } from '@/components/common/Button';
 import { usePlanningStore, parseRecommendations, parseSummary } from '@/stores/planningStore';
 import { useTheme } from '@/context/ThemeContext';
@@ -21,6 +22,7 @@ import { getWeekAndYear } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
 import type { PlanningStackParamList } from '@/types/navigation.types';
 import type { RecommendationItem } from '@/types/domain.types';
+import { useAds } from '@/context/AdContext';
 
 type Nav = NativeStackNavigationProp<PlanningStackParamList>;
 
@@ -45,6 +47,7 @@ export function PlanningHomeScreen() {
   const navigation = useNavigation<Nav>();
   const { currentPlan, isLoading, isGenerating, loadCurrentPlan, generatePlan } =
     usePlanningStore();
+  const { showInterstitialIfEligible } = useAds();
 
   useEffect(() => {
     loadCurrentPlan();
@@ -52,7 +55,9 @@ export function PlanningHomeScreen() {
 
   const handleGenerate = useCallback(async () => {
     await generatePlan();
-  }, [generatePlan]);
+    // Anuncio después de generar el planning, sin bloquear la navegación
+    showInterstitialIfEligible();
+  }, [generatePlan, showInterstitialIfEligible]);
 
   const { weekNumber, year } = getWeekAndYear(new Date());
 
@@ -83,6 +88,7 @@ export function PlanningHomeScreen() {
   }
 
   return (
+    <PremiumGate requiredTier="plus" feature="Planning inteligente">
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <View>
@@ -149,6 +155,7 @@ export function PlanningHomeScreen() {
         />
       </ScrollView>
     </SafeAreaView>
+    </PremiumGate>
   );
 }
 

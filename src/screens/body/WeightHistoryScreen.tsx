@@ -15,6 +15,8 @@ import { WeightChart } from '@/components/body/WeightChart';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useBodyStore } from '@/stores/bodyStore';
 import { useProfileStore } from '@/stores/profileStore';
+import { useTierLimits } from '@/hooks/useTierLimits';
+import { usePaywall } from '@/hooks/usePaywall';
 import { useTheme } from '@/context/ThemeContext';
 import { fromTimestamp } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
@@ -43,6 +45,8 @@ export function WeightHistoryScreen({ navigation: _navigation }: Props) {
   const { colors } = useTheme();
   const { allWeights, weightGoal, loadAllWeights, deleteWeight, isLoading } = useBodyStore();
   const { profile } = useProfileStore();
+  const limits = useTierLimits();
+  const { openPaywall } = usePaywall();
 
   const weighingMode = (profile?.weighing_mode ?? 'daily') as 'daily' | 'weekly' | 'monthly';
 
@@ -60,11 +64,17 @@ export function WeightHistoryScreen({ navigation: _navigation }: Props) {
 
   const rangeConfig = RANGES.find(r => r.key === range)!;
 
-  const filteredData = rangeConfig.days
-    ? allWeights.filter(
-        w => w.date >= Math.floor(Date.now() / 1000) - rangeConfig.days! * 86400,
-      )
-    : allWeights;
+  // Limitar historial según tier: Free ve solo las últimas N semanas
+  const tierCutoff = limits.weightHistoryWeeks === Infinity
+    ? 0
+    : Math.floor(Date.now() / 1000) - limits.weightHistoryWeeks * 7 * 86400;
+
+  const filteredData = (() => {
+    const byTier = tierCutoff > 0 ? allWeights.filter(w => w.date >= tierCutoff) : allWeights;
+    return rangeConfig.days
+      ? byTier.filter(w => w.date >= Math.floor(Date.now() / 1000) - rangeConfig.days! * 86400)
+      : byTier;
+  })();
 
   const sorted = [...filteredData].sort((a, b) => a.date - b.date);
 
@@ -101,6 +111,18 @@ export function WeightHistoryScreen({ navigation: _navigation }: Props) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
+        {/* Aviso de límite para Free */}
+        {limits.weightHistoryWeeks !== Infinity && (
+          <Pressable
+            style={{ backgroundColor: `${colors.secondary}15`, borderRadius: 8, padding: 10, marginBottom: 4 }}
+            onPress={() => openPaywall('plus')}
+          >
+            <Text style={{ color: colors.secondary, fontSize: 12, textAlign: 'center' }}>
+              Mostrando las últimas {limits.weightHistoryWeeks} semanas · Toca para ver el historial completo con Plus
+            </Text>
+          </Pressable>
+        )}
+
         {/* Range selector */}
         <View style={styles.rangeRow}>
           {RANGES.map(r => {

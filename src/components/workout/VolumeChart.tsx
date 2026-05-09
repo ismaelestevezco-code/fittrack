@@ -6,7 +6,7 @@ import { fromTimestamp } from '@/utils/dateUtils';
 import { useTheme } from '@/context/ThemeContext';
 import { Typography } from '@/constants/theme';
 
-export type VolumeMetric = 'maxWeightKg' | 'totalVolumeKg' | 'totalReps';
+export type VolumeMetric = 'maxWeightKg' | 'totalVolumeKg' | 'totalReps' | 'estimatedOneRM';
 
 interface VolumeChartProps {
   data: ExerciseProgressPoint[];
@@ -22,7 +22,7 @@ function getMetricValue(point: ExerciseProgressPoint, metric: VolumeMetric): num
 
 function formatY(value: number, metric: VolumeMetric): string {
   if (metric === 'totalReps') return `${Math.round(value)}`;
-  return value >= 1000 ? `${(value / 1000).toFixed(1)}t` : `${value.toFixed(1)}`;
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}t` : `${value.toFixed(1)}kg`;
 }
 
 function formatXDate(ts: number): string {

@@ -11,6 +11,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { Button } from '@/components/common/Button';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { NumberInput } from '@/components/common/NumberInput';
 import { Input } from '@/components/common/Input';
 import { useBodyStore } from '@/stores/bodyStore';
@@ -84,6 +85,7 @@ export function LogWeightScreen({ navigation }: Props) {
   const todayTs = toDayTimestamp(new Date());
   const initialDate = getMostRecentAllowedDate(weighingMode, weighingDays, todayTs);
 
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [weight, setWeight] = useState(latestWeight);
   const [notes, setNotes] = useState('');
@@ -91,6 +93,10 @@ export function LogWeightScreen({ navigation }: Props) {
   const [error, setError] = useState('');
 
   const existingRecord = recentWeights.find(w => w.date === selectedDate);
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
     if (existingRecord) {
@@ -168,6 +174,14 @@ export function LogWeightScreen({ navigation }: Props) {
       setSaving(false);
     }
   }, [saving, weight, selectedDate, notes, logWeight, navigation]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+        <LoadingSpinner />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>

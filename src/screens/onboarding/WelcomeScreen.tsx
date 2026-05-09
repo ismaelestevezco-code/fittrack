@@ -27,9 +27,9 @@ const FEATURES: Array<{
     description: 'Gráficas de evolución de peso y rendimiento semana a semana.',
   },
   {
-    icon: 'calendar-check',
-    title: 'Planning inteligente',
-    description: 'Recomendaciones personalizadas basadas en tus datos reales.',
+    icon: 'brain',
+    title: 'Coach IA personalizado',
+    description: 'Recibe recomendaciones basadas en tu progreso real, ajustadas a cómo te sientes cada semana.',
   },
 ];
 
@@ -73,7 +73,7 @@ export function WelcomeScreen({ navigation }: Props) {
 
         <View style={styles.footer}>
           <Text style={[styles.noAccount, { color: colors.textHint }]}>
-            Sin registro · Sin internet · 100% privado
+            Gratis para empezar · Tus datos siempre contigo
           </Text>
           <Button
             label="Empezar ahora"

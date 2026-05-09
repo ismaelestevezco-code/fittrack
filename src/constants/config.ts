@@ -1,5 +1,5 @@
 export const APP_VERSION = '1.0.0';
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 export const DB_NAME = 'fittrack.db';
 
 export const MAX_SETS_PER_EXERCISE = 10;

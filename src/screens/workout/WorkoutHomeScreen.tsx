@@ -68,6 +68,11 @@ export function WorkoutHomeScreen() {
 
   const completedCount = weekSessions.filter(s => s.finished_at != null).length;
   const totalDays = routineDays.filter(d => d.is_rest_day !== 1).length;
+  const todayDow = new Date().getDay(); // 0=Sun…6=Sat
+  const todayIso = todayDow === 0 ? 7 : todayDow; // convert to ISO 1=Mon…7=Sun
+  const todayIndex = weekOffset === 0
+    ? routineDays.findIndex(d => d.day_of_week === todayIso)
+    : -1;
 
   if (isLoading) {
     return (
@@ -125,7 +130,28 @@ export function WorkoutHomeScreen() {
             {activeRoutine.name}
           </Text>
 
-          <AccentLine marginBottom={Spacing[3]} />
+          {/* Stats arriba */}
+          <View style={styles.statsRow}>
+            <StatCard value={`${completedCount}/${totalDays}`} label="Completados" color="primary" />
+            <StatCard value={weekTotalSets} label="Series" color="secondary" />
+            <StatCard value={`${weekTotalVolume.toFixed(1)}`} label="Ton." color="warning" />
+          </View>
+
+          {/* Hoy destacado */}
+          {todayIndex >= 0 && routineDays[todayIndex] != null && (
+            <View style={[styles.todaySection, { borderColor: colors.primary, backgroundColor: `${colors.primary}08` }]}>
+              <Text style={[styles.todayLabel, { color: colors.primary }]}>Hoy</Text>
+              <DayCard
+                day={routineDays[todayIndex]}
+                date={weekDays[todayIndex]}
+                session={weekSessions.find(s => s.routine_day_id === routineDays[todayIndex].id)}
+                exerciseCount={exerciseCounts[routineDays[todayIndex].id] ?? 0}
+                onPress={() => handleDayPress(todayIndex)}
+              />
+            </View>
+          )}
+
+          <AccentLine marginBottom={Spacing[2]} />
 
           {routineDays.map((day, index) => {
             const session = weekSessions.find(s => s.routine_day_id === day.id);
@@ -140,12 +166,6 @@ export function WorkoutHomeScreen() {
               />
             );
           })}
-
-          <View style={styles.statsRow}>
-            <StatCard value={`${completedCount}/${totalDays}`} label="Días completados" color="primary" />
-            <StatCard value={weekTotalSets} label="Series totales" color="secondary" />
-            <StatCard value={`${weekTotalVolume.toFixed(1)}`} label="Ton. movidas" color="warning" />
-          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -195,6 +215,20 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: Spacing[2],
-    marginTop: Spacing[3],
+    marginBottom: Spacing[4],
+  },
+  todaySection: {
+    borderWidth: 1,
+    borderRadius: Layout.cardRadius,
+    padding: Spacing[3],
+    marginBottom: Spacing[3],
+    overflow: 'hidden',
+  },
+  todayLabel: {
+    fontSize: Typography.fontSize.caption,
+    fontWeight: Typography.fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: Spacing[2],
   },
 });

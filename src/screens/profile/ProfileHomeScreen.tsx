@@ -20,6 +20,8 @@ import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { NumberInput } from '@/components/common/NumberInput';
 import { useProfileStore } from '@/stores/profileStore';
+import { usePremium } from '@/context/PremiumContext';
+import { usePaywall } from '@/hooks/usePaywall';
 import {
   GOAL_LABELS,
   SEX_LABELS,
@@ -29,6 +31,10 @@ import {
 } from '@/utils/formatUtils';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { logoutUser } from '@/firebase/authService';
+import { uploadSnapshot } from '@/firebase/syncService';
+import { ADMIN_EMAIL } from '@/firebase/firebaseConfig';
 import { Gradients, Layout, Spacing, Typography } from '@/constants/theme';
 import { APP_VERSION } from '@/constants/config';
 import type { ProfileStackParamList } from '@/types/navigation.types';
@@ -84,6 +90,31 @@ export function ProfileHomeScreen() {
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Nav>();
   const { profile, isLoading, updateProfile } = useProfileStore();
+  const { user } = useAuth();
+  const { tier, isPremium } = usePremium();
+  const { openPaywall } = usePaywall();
+
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Seguro que quieres cerrar sesión? Tu progreso está guardado en la nube.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: async () => {
+            if (user) {
+              await uploadSnapshot(user.uid);
+            }
+            await logoutUser();
+          },
+        },
+      ],
+    );
+  }, [user]);
 
   const [editSection, setEditSection] = useState<EditSection>(null);
   const [saving, setSaving] = useState(false);
@@ -236,6 +267,29 @@ export function ProfileHomeScreen() {
           <Text style={[styles.avatarName, { color: colors.textPrimary }]}>{profile.name}</Text>
         </View>
 
+        {/* Tier card */}
+        <Pressable
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={isPremium ? undefined : () => openPaywall()}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
+            <MaterialCommunityIcons
+              name={tier === 'pro' ? 'crown' : tier === 'plus' ? 'star' : 'star-outline'}
+              size={20}
+              color={tier === 'pro' ? colors.secondary : tier === 'plus' ? colors.accent : colors.textSecondary}
+            />
+            <Text style={[styles.cardTitle, { color: tier === 'pro' ? colors.secondary : tier === 'plus' ? colors.accent : colors.textSecondary, flex: 1 }]}>
+              FitTrack {tier === 'free' ? 'Gratis' : tier === 'plus' ? 'Plus' : 'Pro'}
+            </Text>
+            {!isPremium && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ color: colors.primary, fontSize: Typography.fontSize.sm }}>Mejorar plan</Text>
+                <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
+              </View>
+            )}
+          </View>
+        </Pressable>
+
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.cardHeader}>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>Datos personales</Text>
@@ -278,6 +332,16 @@ export function ProfileHomeScreen() {
           </View>
           <InfoRow label="Disponible" value={EQUIPMENT_LABELS[profile.equipment] ?? profile.equipment} />
         </View>
+
+
+        {/* Cerrar sesión */}
+        <Pressable
+          style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={handleLogout}
+        >
+          <MaterialCommunityIcons name="logout" size={20} color={colors.danger} />
+          <Text style={[styles.actionRowText, { color: colors.danger }]}>Cerrar sesión</Text>
+        </Pressable>
 
         <Text style={[styles.version, { color: colors.textHint }]}>FitTrack v{APP_VERSION}</Text>
       </ScrollView>
@@ -556,5 +620,18 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+    borderRadius: Layout.cardRadius,
+    borderWidth: 0.5,
+    padding: Spacing[4],
+  },
+  actionRowText: {
+    flex: 1,
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.medium,
   },
 });

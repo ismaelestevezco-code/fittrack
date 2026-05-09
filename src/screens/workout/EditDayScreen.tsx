@@ -11,8 +11,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Modal } from '@/components/common/Modal';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
+import { ExercisePickerModal } from '@/components/workout/ExercisePickerModal';
+import type { LibraryExercise } from '@/constants/exerciseLibrary';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { NumberInput } from '@/components/common/NumberInput';
@@ -209,6 +212,7 @@ export function EditDayScreen({ navigation, route }: Props) {
   const [nameError, setNameError] = useState('');
 
   const [deleteTarget, setDeleteTarget] = useState<ExerciseRow | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   // Category modal state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -330,6 +334,24 @@ export function EditDayScreen({ navigation, route }: Props) {
     setDeleteTarget(null);
     await refreshExercises();
   }, [deleteTarget, routineDayId, deleteExercise, refreshExercises]);
+
+  const handleSelectFromLibrary = useCallback(
+    async (libraryEx: LibraryExercise) => {
+      await addExercise({
+        routine_day_id: routineDayId,
+        name: libraryEx.name,
+        target_sets: libraryEx.defaultSets,
+        target_reps: libraryEx.defaultReps,
+        target_weight_kg: 0,
+        rest_seconds: libraryEx.defaultRestSeconds,
+        notes: libraryEx.notes ?? null,
+        category_id: null,
+      });
+      await refreshExercises();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [routineDayId, addExercise, refreshExercises],
+  );
 
   // ── Category modal handlers ──────────────────────────────────────────────
 
@@ -548,13 +570,22 @@ export function EditDayScreen({ navigation, route }: Props) {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Ejercicios</Text>
-                <Pressable
-                  style={[styles.addBtn, { borderColor: colors.primary }]}
-                  onPress={openAddExercise}
-                >
-                  <MaterialCommunityIcons name="plus" size={16} color={colors.primary} />
-                  <Text style={[styles.addBtnText, { color: colors.primary }]}>Añadir</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', gap: Spacing[2] }}>
+                  <Pressable
+                    style={[styles.addBtn, { borderColor: colors.border }]}
+                    onPress={() => setShowLibrary(true)}
+                  >
+                    <MaterialCommunityIcons name="book-open-outline" size={16} color={colors.textSecondary} />
+                    <Text style={[styles.addBtnText, { color: colors.textSecondary }]}>Biblioteca</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.addBtn, { borderColor: colors.primary }]}
+                    onPress={openAddExercise}
+                  >
+                    <MaterialCommunityIcons name="plus" size={16} color={colors.primary} />
+                    <Text style={[styles.addBtnText, { color: colors.primary }]}>Añadir</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           </>
@@ -750,6 +781,13 @@ export function EditDayScreen({ navigation, route }: Props) {
         destructive
         onConfirm={handleDeleteCategory}
         onCancel={() => setDeleteCategoryTarget(null)}
+      />
+
+      {/* ── Exercise library picker ──────────────────────────────────────── */}
+      <ExercisePickerModal
+        visible={showLibrary}
+        onClose={() => setShowLibrary(false)}
+        onSelect={handleSelectFromLibrary}
       />
     </SafeAreaView>
   );

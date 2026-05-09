@@ -1,15 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
+import { PremiumProvider } from '@/context/PremiumContext';
+import { AdProvider } from '@/context/AdContext';
 import { initDatabase } from '@/database/database';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { SplashVideo } from '@/components/common/SplashVideo';
+import { triggerPause } from '@/utils/timerNotification';
 import { Typography, Spacing } from '@/constants/theme';
+
+// Mostrar notificaciones de fin de temporizador en primer plano
+Notifications.setNotificationHandler({
+  handleNotification: async (notification) => {
+    const isTimerEnd = notification.request.content.data?.type === 'timer-end';
+    return {
+      shouldShowAlert: isTimerEnd,
+      shouldShowBanner: isTimerEnd,
+      shouldShowList: isTimerEnd,
+      shouldPlaySound: isTimerEnd,
+      shouldSetBadge: false,
+    };
+  },
+});
 
 type DbStatus = 'loading' | 'ok' | 'error';
 
-// Minimum time the splash is visible so the video has a chance to play
 const MIN_SPLASH_MS = 2500;
 
 function AppContent() {
@@ -45,6 +63,16 @@ function AppContent() {
     }
   }, [dbStatus, splashOpacity]);
 
+  // Manejar acción "Pausar" de la notificación del temporizador
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      if (response.actionIdentifier === 'pause') {
+        triggerPause();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   if (dbStatus === 'error') {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -74,8 +102,13 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
+      <StatusBar style="light" backgroundColor="transparent" translucent />
       <ThemeProvider>
-        <AppContent />
+        <PremiumProvider>
+          <AdProvider>
+            <AppContent />
+          </AdProvider>
+        </PremiumProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

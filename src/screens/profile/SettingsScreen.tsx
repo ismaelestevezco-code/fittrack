@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Pressable,
+  Switch,
   TextInput,
   Share,
   ActivityIndicator,
@@ -30,6 +31,15 @@ import { weightGoalRepository } from '@/repositories/WeightGoalRepository';
 import { weeklyPlanRepository } from '@/repositories/WeeklyPlanRepository';
 import { APP_VERSION } from '@/constants/config';
 import { Layout, Spacing, Typography } from '@/constants/theme';
+import {
+  isReminderEnabled,
+  getReminderHour,
+  scheduleWorkoutReminder,
+  cancelWorkoutReminder,
+} from '@/utils/workoutReminder';
+import { useAuth } from '@/context/AuthContext';
+import { uploadSnapshot } from '@/firebase/syncService';
+import { useFirebaseSync } from '@/hooks/useFirebaseSync';
 
 type Nav = NativeStackNavigationProp<ProfileStackParamList>;
 
@@ -38,15 +48,71 @@ export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
   const { profile, updateProfile, loadProfile } = useProfileStore();
 
+  const { user } = useAuth();
+  useFirebaseSync();
   const [showResetConfirm1, setShowResetConfirm1] = useState(false);
   const [showResetConfirm2, setShowResetConfirm2] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(9);
+
+  useEffect(() => {
+    async function loadReminder() {
+      const enabled = await isReminderEnabled();
+      const hour = await getReminderHour();
+      setReminderEnabled(enabled);
+      setReminderHour(hour);
+    }
+    loadReminder();
+  }, []);
+
+  const handleToggleReminder = useCallback(async (value: boolean) => {
+    if (value) {
+      const success = await scheduleWorkoutReminder(reminderHour);
+      if (success) {
+        setReminderEnabled(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert(
+          'Permisos necesarios',
+          'FitTrack necesita permiso para enviarte notificaciones. Actívalo en los ajustes del sistema.',
+        );
+      }
+    } else {
+      await cancelWorkoutReminder();
+      setReminderEnabled(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [reminderHour]);
+
+  const handleHourChange = useCallback(async (hour: number) => {
+    setReminderHour(hour);
+    if (reminderEnabled) {
+      await scheduleWorkoutReminder(hour);
+    }
+  }, [reminderEnabled]);
+
+  async function handleSyncNow() {
+    if (!user) return;
+    setSyncing(true);
+    try {
+      await uploadSnapshot(user.uid);
+      Alert.alert('Sincronización completada', 'Tus datos se han subido a la nube correctamente.');
+    } catch {
+      Alert.alert('Error', 'No se pudo sincronizar. Comprueba tu conexión.');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const isImperial = profile?.units === 'imperial';
 
   const weighingMode = (profile?.weighing_mode ?? 'daily') as 'daily' | 'weekly' | 'monthly';
   const weighingDays: number[] = JSON.parse(profile?.weighing_days ?? '[]');
+  const measurementFrequency = (profile?.measurement_frequency ?? 'monthly') as 'weekly' | 'monthly';
 
   const WEEK_DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
   const WEEK_DAY_VALUES = [1, 2, 3, 4, 5, 6, 7];
@@ -63,6 +129,11 @@ export function SettingsScreen() {
     let days: number[] = [];
     if (mode === 'monthly') days = [0]; // default: primer día del mes
     await updateProfile({ weighing_mode: mode, weighing_days: JSON.stringify(days) });
+  }
+
+  async function handleMeasurementFrequencyChange(freq: 'weekly' | 'monthly') {
+    if (!profile) return;
+    await updateProfile({ measurement_frequency: freq });
   }
 
   async function handleToggleWeekDay(day: number) {
@@ -194,6 +265,51 @@ export function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
+        {/* Recordatorio */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Recordatorio de entrenamiento</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.row, { minHeight: undefined, paddingVertical: Spacing[3] }]}>
+              <View style={styles.rowContent}>
+                <MaterialCommunityIcons name="bell-ring-outline" size={20} color={colors.primary} />
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Recordatorio diario</Text>
+                  <Text style={[styles.rowValue, { color: colors.textHint }]}>Notificación diaria para no saltarte el entreno</Text>
+                </View>
+              </View>
+              <Switch
+                value={reminderEnabled}
+                onValueChange={handleToggleReminder}
+                trackColor={{ false: colors.surfaceHigh, true: `${colors.primary}60` }}
+                thumbColor={reminderEnabled ? colors.primary : colors.textHint}
+              />
+            </View>
+
+            {reminderEnabled && (
+              <View style={styles.hourRow}>
+                <Text style={[styles.hourLabel, { color: colors.textSecondary }]}>Hora del recordatorio</Text>
+                <View style={styles.hourControls}>
+                  <Pressable
+                    onPress={() => handleHourChange(Math.max(5, reminderHour - 1))}
+                    style={[styles.hourBtn, { backgroundColor: colors.surfaceHigh }]}
+                  >
+                    <Text style={[styles.hourBtnText, { color: colors.primary }]}>−</Text>
+                  </Pressable>
+                  <Text style={[styles.hourValue, { color: colors.textPrimary }]}>
+                    {String(reminderHour).padStart(2, '0')}:00
+                  </Text>
+                  <Pressable
+                    onPress={() => handleHourChange(Math.min(22, reminderHour + 1))}
+                    style={[styles.hourBtn, { backgroundColor: colors.surfaceHigh }]}
+                  >
+                    <Text style={[styles.hourBtnText, { color: colors.primary }]}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* Cuerpo */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Cuerpo</Text>
@@ -204,6 +320,7 @@ export function SettingsScreen() {
                 <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Frecuencia de pesaje</Text>
               </View>
             </View>
+
 
             <View style={{ paddingHorizontal: Spacing[4], paddingBottom: Spacing[3], gap: Spacing[3] }}>
               {/* Mode selector buttons */}
@@ -392,6 +509,53 @@ export function SettingsScreen() {
               )}
             </View>
           </View>
+
+          {/* Measurement frequency card */}
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.row, { minHeight: undefined, paddingVertical: Spacing[3] }]}>
+              <View style={styles.rowContent}>
+                <MaterialCommunityIcons name="tape-measure" size={20} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Frecuencia de medidas</Text>
+              </View>
+            </View>
+            <View style={{ paddingHorizontal: Spacing[4], paddingBottom: Spacing[3], gap: Spacing[2] }}>
+              <View style={{ flexDirection: 'row', gap: Spacing[2] }}>
+                {(['weekly', 'monthly'] as const).map(freq => {
+                  const labels = { weekly: 'Semanal', monthly: 'Mensual' };
+                  const active = measurementFrequency === freq;
+                  return (
+                    <Pressable
+                      key={freq}
+                      style={{
+                        flex: 1,
+                        height: 34,
+                        borderRadius: Layout.borderRadius.md,
+                        borderWidth: 1,
+                        borderColor: active ? colors.primary : colors.border,
+                        backgroundColor: active ? colors.primary : colors.surface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      onPress={() => handleMeasurementFrequencyChange(freq)}
+                    >
+                      <Text style={{
+                        fontSize: Typography.fontSize.sm,
+                        fontWeight: Typography.fontWeight.medium,
+                        color: active ? colors.background : colors.textSecondary,
+                      }}>
+                        {labels[freq]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={{ fontSize: Typography.fontSize.xs, color: colors.textHint, textAlign: 'center' }}>
+                {measurementFrequency === 'weekly'
+                  ? 'Registra tus medidas cada semana'
+                  : 'Registra tus medidas una vez al mes'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Unidades */}
@@ -453,6 +617,23 @@ export function SettingsScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Datos</Text>
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable style={styles.row} onPress={handleSyncNow} disabled={syncing}>
+              <View style={styles.rowContent}>
+                <MaterialCommunityIcons name="cloud-sync-outline" size={20} color={colors.primary} />
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Sincronizar con la nube</Text>
+                  <Text style={[styles.rowValue, { color: colors.textSecondary }]}>Sube tus datos ahora para restaurarlos en otro dispositivo</Text>
+                </View>
+              </View>
+              {syncing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textHint} />
+              )}
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
             <Pressable style={styles.row} onPress={handleExport} disabled={exporting}>
               <View style={styles.rowContent}>
                 <MaterialCommunityIcons name="export" size={20} color={colors.textSecondary} />
@@ -603,5 +784,39 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     alignSelf: 'flex-end',
+  },
+  hourRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Spacing[3],
+    paddingHorizontal: Spacing[4],
+    paddingBottom: Spacing[3],
+  },
+  hourLabel: {
+    fontSize: Typography.fontSize.sm,
+  },
+  hourControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+  },
+  hourBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hourBtnText: {
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  hourValue: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semibold,
+    minWidth: 48,
+    textAlign: 'center',
   },
 });

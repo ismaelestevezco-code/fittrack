@@ -1,92 +1,194 @@
-# PROGRESO — FitTrack Development
+# PROGRESO — FitTrack
 
-## Estado actual
-**Fase:** FASE 2 — Módulo de Entrenamientos (Core)  
-**Estado de la fase:** ✅ COMPLETADA
+## Estado actual: Sprint 3 completado ✅ · Siguiente: Auditoría nº 2
 
-## Tareas completadas en Fase 0
-- [x] Proyecto Expo creado con template TypeScript (Expo SDK 54, React Native 0.81.5)
-- [x] Dependencias instaladas: navegación, expo-sqlite, zustand, victory-native, date-fns, expo-haptics, react-native-svg
-- [x] TypeScript configurado con path alias `@/` → `./src/`
-- [x] babel.config.js con module-resolver
-- [x] .eslintrc.js y .prettierrc configurados
-- [x] Estructura de carpetas completa creada bajo `src/`
-- [x] Design tokens completos (theme.ts, layout.ts, config.ts)
-- [x] Tipos TypeScript completos (database.types.ts, domain.types.ts, navigation.types.ts)
-- [x] Base de datos SQLite con 9 tablas, índices, WAL, FK, migraciones
+`npx tsc --noEmit` → sin errores.
 
-## Tareas completadas en Fase 1
-- [x] `src/repositories/ProfileRepository.ts` — CRUD completo (getFirst, create, update)
-- [x] `src/stores/profileStore.ts` — Estado Zustand con loadProfile, setPendingSetup, createProfile, updateProfile
-- [x] `src/components/common/Button.tsx` — Variantes primary/secondary/destructive, loading state
-- [x] `src/components/common/Card.tsx` — Contenedor con shadow y borderRadius configurables
-- [x] `src/components/common/Input.tsx` — Input con label, error, hint
-- [x] `src/components/common/NumberInput.tsx` — Input numérico con botones +/-, min/max/step/decimales
-- [x] `src/screens/onboarding/WelcomeScreen.tsx` — Logo, 3 features con iconos, CTA "Empezar ahora"
-- [x] `src/screens/onboarding/ProfileSetupScreen.tsx` — Paso 1/2: nombre, edad, estatura, peso, sexo
-- [x] `src/screens/onboarding/GoalSetupScreen.tsx` — Paso 2/2: objetivo, nivel, días, equipamiento
-- [x] `src/navigation/MainTabNavigator.tsx` — 4 tabs con MaterialCommunityIcons
-- [x] `src/navigation/RootNavigator.tsx` — Stack que cambia entre Onboarding/Main según perfil en store
-- [x] `App.tsx` actualizado — SafeAreaProvider + RootNavigator tras init DB
-- [x] `@expo/vector-icons` instalado (SDK 54 compatible)
-- [x] `npx tsc --noEmit` pasa sin errores
+---
 
-## Tareas completadas en Fase 2
-- [x] `src/repositories/RoutineRepository.ts` — CRUD rutinas + días. create() genera 7 días automáticamente
-- [x] `src/repositories/ExerciseRepository.ts` — CRUD ejercicios con sort_order automático
-- [x] `src/repositories/WorkoutSessionRepository.ts` — CRUD sesiones, getByWeek, finish()
-- [x] `src/repositories/SetLogRepository.ts` — CRUD set_logs, getBySession, getByExercise
-- [x] `src/utils/dateUtils.ts` — getWeekAndYear, toDayTimestamp, getWeekStart, formatWeekLabel, formatDuration
-- [x] `src/stores/workoutStore.ts` — Estado Zustand completo: rutinas, días, sesiones, sets
-- [x] `src/components/common/Modal.tsx` — Modal genérico con overlay semitransparente
-- [x] `src/components/common/ConfirmModal.tsx` — Modal de confirmación con acciones primaria/destructiva
-- [x] `src/components/common/EmptyState.tsx` — Placeholder con icono, título, descripción y CTA
-- [x] `src/components/common/SectionHeader.tsx` — Cabecera de sección con acción opcional
-- [x] `src/components/workout/DayCard.tsx` — Card de día con estado completado/en curso/pendiente/descanso
-- [x] `src/components/workout/ExerciseItem.tsx` — Item de ejercicio con nombre, series×reps, peso
-- [x] `src/components/workout/SetRow.tsx` — Fila de serie con steppers compactos de peso y reps
-- [x] `src/components/workout/WeekSelector.tsx` — Selector de semana con prev/next y label formateado
-- [x] `src/navigation/WorkoutStackNavigator.tsx` — Stack completo con stubs para Fase 4 (ExerciseHistory, WeekComparison)
-- [x] `src/screens/workout/WorkoutHomeScreen.tsx` — Vista semanal con DayCards, WeekSelector y resumen
-- [x] `src/screens/workout/DayDetailScreen.tsx` — Lista de ejercicios + botón iniciar/ver resumen
-- [x] `src/screens/workout/ActiveWorkoutScreen.tsx` — Timer + SetRows + log en tiempo real + Finalizar
-- [x] `src/screens/workout/WorkoutSummaryScreen.tsx` — Resumen post-entreno con comparativa vs sesión anterior
-- [x] `src/screens/workout/EditDayScreen.tsx` — Gestión de ejercicios por día con modales de alta/edición
-- [x] `src/screens/workout/RoutineManagerScreen.tsx` — Crear/renombrar/activar/eliminar rutinas
-- [x] `src/screens/onboarding/GoalSetupScreen.tsx` — Actualizado: crea rutina inicial al completar onboarding
-- [x] `src/navigation/MainTabNavigator.tsx` — Actualizado: usa WorkoutStackNavigator en tab Entreno
-- [x] `npx tsc --noEmit` pasa sin errores
+## Arquitectura general
 
-## Notas técnicas de Fase 2
-- `RoutineRepository.create()` crea automáticamente 7 días (Lun–Dom) y desactiva las otras rutinas
-- `WorkoutSessionRepository` usa semanas ISO (getISOWeek de date-fns)
-- `workoutStore` carga exerciseCounts (map dayId→count) junto con loadActiveRoutine para evitar queries en render
-- `SetRow` implementa steppers compactos propios (no usa NumberInput) para layout horizontal en ActiveWorkoutScreen
-- `WorkoutStackNavigator` incluye stubs para ExerciseHistoryScreen y WeekComparisonScreen (Fase 4)
-- El flujo de onboarding ahora crea la rutina inicial con `createRoutine('Mi primera rutina')` tras `createProfile`
-- `ActiveWorkoutScreen` usa `navigation.replace('WorkoutSummary')` al finalizar para impedir volver con back
-- `WorkoutSummaryScreen` usa `navigation.navigate('WorkoutHome')` al pulsar "Volver al inicio"
+- **Framework:** React Native + Expo SDK 54, TypeScript 5.x
+- **Base de datos:** SQLite local via `expo-sqlite` (offline-first, sin servidor)
+- **Navegación:** React Navigation 6 (native-stack + bottom-tabs)
+- **Estado global:** Zustand 4.x
+- **Gráficas:** SVG nativo (WeightChart propio) + Victory Native (VolumeChart)
+- **Monetización:** RevenueCat (`react-native-purchases` v8.x) — tres tiers: Free / Plus / Pro
+- **Anuncios:** Google AdMob (`react-native-google-mobile-ads` v14.x) — solo tier Free
+- **Backend opcional:** Firebase (auth + Firestore) — solo backup para Plus/Pro
+- **Notificaciones:** `expo-notifications` — timer de descanso en ActiveWorkoutScreen
 
-## Siguiente fase
-**FASE 3 — Módulo de Cuerpo**
+---
 
-### Tareas pendientes de Fase 3
-- [ ] `src/repositories/BodyWeightRepository.ts`
-- [ ] `src/repositories/BodyMeasurementRepository.ts`
-- [ ] `src/stores/bodyStore.ts`
-- [ ] `src/hooks/useBodyProgress.ts`
-- [ ] `src/components/body/WeightCard.tsx`
-- [ ] `src/components/body/WeightChart.tsx`
-- [ ] `src/components/body/PaceIndicator.tsx`
-- [ ] `src/components/body/GoalProgressCard.tsx`
-- [ ] `src/components/body/MeasurementRow.tsx`
-- [ ] `src/navigation/BodyStackNavigator.tsx`
-- [ ] `src/screens/body/BodyHomeScreen.tsx` — versión completa (reemplaza stub)
-- [ ] `src/screens/body/LogWeightScreen.tsx`
-- [ ] `src/screens/body/WeightHistoryScreen.tsx`
-- [ ] `src/screens/body/MeasurementsScreen.tsx`
-- [ ] `src/screens/body/WeightGoalScreen.tsx`
-- [ ] `src/navigation/MainTabNavigator.tsx` — actualizar tab Body con BodyStackNavigator
+## Base del proyecto (Fases 0–7) ✅
 
-## Frase para retomar en nueva sesión
-"Retoma el desarrollo de FitTrack. Fases 0, 1 y 2 completadas. `npx tsc --noEmit` pasa sin errores. Continúa con la Fase 3 — Módulo de Cuerpo: BodyWeightRepository, BodyMeasurementRepository, bodyStore, hook useBodyProgress, componentes body (WeightCard, WeightChart, PaceIndicator, GoalProgressCard, MeasurementRow), BodyStackNavigator y las pantallas BodyHomeScreen (completa), LogWeightScreen, WeightHistoryScreen, MeasurementsScreen, WeightGoalScreen. También actualiza MainTabNavigator para usar BodyStackNavigator. Tienes permiso total para crear archivos y tomar decisiones técnicas dentro del CLAUDE.md. Trabaja de forma autónoma."
+Todas las fases de desarrollo inicial están completas:
+
+### Infraestructura (Fase 0)
+- Estructura de carpetas completa con path aliases `@/`
+- TypeScript con tsconfig, ESLint + Prettier
+- `src/database/schema.ts` — DDL completo (9 tablas)
+- `src/database/database.ts` — singleton SQLite, `initDatabase()`
+- `src/database/migrations.ts` — sistema de migraciones por versión
+- `src/types/database.types.ts` — mapeo exacto de filas SQLite
+- `src/types/domain.types.ts` — tipos de negocio (`ExerciseProgressPoint` incluye `estimatedOneRM`)
+- `src/types/navigation.types.ts` — parámetros de navegación por pantalla
+- `src/constants/theme.ts` — design tokens (Colors, Typography, Spacing, Layout)
+
+### Onboarding y Perfil (Fase 1)
+- `WelcomeScreen`, `ProfileSetupScreen`, `GoalSetupScreen` — flujo completo
+- `ProfileRepository` + `profileStore` — CRUD perfil en SQLite
+- `RootNavigator` — decide entre Onboarding y MainApp según existencia de perfil
+- `MainTabNavigator` — 4 tabs: Workout, Body, Planning, Profile
+- Componentes comunes: `Button`, `Input`, `NumberInput`, `Card`, `Modal`, `ConfirmModal`, `EmptyState`, `SectionHeader`, `LoadingSpinner`, `Badge`, `ProgressBar`
+
+### Módulo de Entrenamientos (Fase 2)
+- Repositorios: `RoutineRepository`, `ExerciseRepository`, `WorkoutSessionRepository`, `SetLogRepository`
+- `workoutStore` — estado y acciones de entrenamientos
+- Pantallas: `WorkoutHomeScreen`, `DayDetailScreen`, `ActiveWorkoutScreen`, `WorkoutSummaryScreen`, `RoutineManagerScreen`, `EditDayScreen`
+- Componentes: `DayCard`, `ExerciseItem`, `SetRow`, `WeekSelector`
+- Timer de sesión, registro de sets en tiempo real, resumen post-entrenamiento
+
+### Módulo de Cuerpo (Fase 3)
+- Repositorios: `BodyWeightRepository`, `BodyMeasurementRepository`
+- `bodyStore` + `useBodyProgress` — cálculo de ritmo y proyecciones
+- Pantallas: `BodyHomeScreen`, `LogWeightScreen`, `WeightHistoryScreen`, `MeasurementsScreen`, `WeightGoalScreen`
+- Componentes: `WeightCard`, `WeightChart` (SVG nativo), `PaceIndicator`, `GoalProgressCard`, `MeasurementRow`
+
+### Gráficas de Progreso (Fase 4)
+- `progressCalculator.ts` — `calculateExerciseProgress`, `estimateOneRepMax` (Brzycki), `getMax1RMFromSets`, `calculateWeeklyData`
+- `VolumeChart` — gráfica Victory Native con métricas: peso máximo, volumen, reps, 1RM estimado
+- `ExerciseHistoryScreen` — evolución de un ejercicio con selector de métrica
+- `WeekComparisonScreen` — tabla + gráfica comparativa entre semanas
+
+### Planning Inteligente (Fase 5)
+- `weeklyAnalyzer.ts` — métricas calculadas de las últimas 4 semanas
+- `planningEngine.ts` — 10 reglas de recomendación (R01–R10)
+- `WeeklyPlanRepository` + `planningStore`
+- Pantallas: `PlanningHomeScreen`, `PlanningHistoryScreen`
+- Componentes: `RecommendationCard`, `PlanningWeekCard`
+
+### Perfil y Configuración (Fase 6)
+- `ProfileHomeScreen` — datos personales, edición inline
+- `SettingsScreen` — toggle de unidades, exportación de datos, backup Firebase
+- `EditPreferencesScreen` — cambio de preferencias de entrenamiento
+- Conversión de unidades métrico/imperial en `formatUtils.ts`
+
+### Pulido y QA (Fase 7)
+- `EmptyState` en todas las pantallas sin datos
+- Feedback háptico (`expo-haptics`) en acciones relevantes
+- Validaciones de formulario
+- `LoadingSpinner` en operaciones de DB
+- Funciona completamente offline
+
+---
+
+## Sprint 1 — Monetización y Arquitectura Freemium ✅
+
+### Infraestructura de tiers
+- `src/constants/tiers.ts` — `AppTier = 'free' | 'plus' | 'pro'`; `TIER_LIMITS` por tier
+- `src/context/PremiumContext.tsx` — RevenueCat init, `determineTier()`, `refreshTier()`; keys de test configuradas
+- `src/hooks/useTierLimits.ts` — acceso a `TIER_LIMITS[tier]`
+- `src/hooks/usePaywall.ts` — `openPaywall(highlightTier?)` navega al PaywallScreen modal
+- `src/hooks/useFirebaseSync.ts` — sync Firebase condicional (solo Plus/Pro, AppState listener)
+- `src/components/common/PremiumGate.tsx` — bloqueo de features con overlay + CTA de upgrade; modo compact disponible
+- `src/screens/paywall/PaywallScreen.tsx` — tabs Plus/Pro, listas de features, compra vía RevenueCat, restaurar compra
+
+### Navegación refactorizada
+- `RootNavigator.tsx` — login eliminado del flujo; app arranca sin cuenta; PaywallScreen como modal
+- `App.tsx` — `AuthProvider` eliminado; `PremiumProvider` añadido; listener notificación timer
+- `navigation.types.ts` — `AuthStackParamList` eliminado; `Paywall` añadido a `RootStackParamList`
+- `WelcomeScreen.tsx` — copy "Gratis para empezar", feature Coach IA
+
+### Límites por módulo
+- `PlanningHomeScreen.tsx` — bloqueado Free (`PremiumGate requiredTier="plus"`)
+- `MeasurementsScreen.tsx` — bloqueado Free (`PremiumGate requiredTier="plus"`)
+- `WeightHistoryScreen.tsx` — historial 4 sem. en Free, banner CTA
+- `ExerciseHistoryScreen.tsx` — 1 métrica en Free vs 4 en Plus
+- `WeekComparisonScreen.tsx` — rango 4 sem. en Free; 8/12 muestran lock
+- `RoutineManagerScreen.tsx` — 1 rutina en Free; intento de crear 2ª abre paywall
+- `ProfileHomeScreen.tsx` — tier card visible con CTA de upgrade
+
+### Firebase y seguridad
+- `app.json` → `app.config.js` con `userInterfaceStyle: 'automatic'`
+- `.env` + `.gitignore` — credenciales Firebase via `expo-constants`
+- `credentialStorage.ts` eliminado — contraseña ya no se guarda en texto claro
+- `authService.ts`, `AuthContext.tsx` — limpieza de referencias a credenciales
+- `SettingsScreen.tsx` — `useFirebaseSync()` activado
+
+---
+
+## Sprint 2 — Mejoras de experiencia ✅
+
+### IMP-02 — Timer de descanso automático al completar serie
+- `SetRow.tsx` — props `restSeconds` (default 90) + `onComplete(restSeconds)` llamado solo al loguear serie nueva (no al actualizar ni eliminar)
+- `ActiveWorkoutScreen.tsx` — `TimerPanel` convertido a `forwardRef<TimerPanelHandle>`; expone `startCountdown(seconds)`; `timerPanelRef` + `handleSetComplete` conectados; tab countdown se activa y arranca automáticamente al terminar serie
+
+### IMP-03 — Peso de última sesión en DayDetailScreen + badges PR
+- `SetLogRepository.ts` — tres nuevos métodos: `getLastSessionWeightsForDay`, `getAllTimeMaxWeightPerExercise`, `countPRsInSession` (devuelve `{ count, exerciseNames[] }`)
+- `ExerciseItem.tsx` — props `lastWeight` ("Última: X kg") e `isPR` (badge ↑ PR verde, toma prioridad sobre `badge`)
+- `DayDetailScreen.tsx` — carga pesos última sesión y máximos históricos en paralelo; pasa `lastWeight` e `isPR` a cada `ExerciseItem`
+
+### IMP-05 — Reorganizar WorkoutHomeScreen con stats arriba
+- `WorkoutHomeScreen.tsx` — fila de stats (completados / series / toneladas) movida encima del listado de días; tarjeta "Hoy" destacada con borde primario y etiqueta "HOY" cuando `weekOffset === 0`
+
+### OPT-01 — PRs celebrados en WorkoutSummaryScreen
+- `WorkoutSummaryScreen.tsx` — card `colors.accent` con icono medal; muestra count de PRs y, si hay > 1, los nombres de los ejercicios separados por " · "; trophy icon del hero también en accent
+
+### OPT-03 — Línea de tendencia en WeightChart
+- `WeightChart.tsx` — función `linearRegression` (mínimos cuadrados ordinarios); línea discontinua gris semitransparente cuando hay ≥ 3 puntos de datos
+
+### FEAT-03 — 1RM estimado en ExerciseHistoryScreen
+- `progressCalculator.ts` — `estimateOneRepMax` (fórmula Brzycki) y `getMax1RMFromSets`
+- `domain.types.ts` — campo `estimatedOneRM` en `ExerciseProgressPoint`
+- `VolumeChart.tsx` — tipo `VolumeMetric` extendido con `'estimatedOneRM'`
+- `ExerciseHistoryScreen.tsx` — cuarta métrica "1RM estimado" en selector de toggle y panel de stats
+
+---
+
+## Sprint 3 — AdMob: anuncios intersticiales para Free ✅
+
+### Instalación y configuración
+- `react-native-google-mobile-ads@^14.0.0` instalado
+- `app.config.js` — plugin AdMob con App IDs (TestIds en `__DEV__`, producción desde `.env`); variables `admobIosInterstitialId` / `admobAndroidInterstitialId` en `extra`
+- `.env` — credenciales AdMob de producción añadidas (IDs reales de la cuenta)
+
+### Infraestructura de anuncios
+- `src/constants/admob.ts` — `ADMOB_INTERSTITIAL_ID` (TestIds en DEV, IDs reales en prod), `ADMOB_MIN_INTERVAL_MS = 3 min`
+- `src/context/AdContext.tsx` — `AdProvider` con `InterstitialAd`, precarga automática, control de intervalo (3 min via ref), callback al cerrar; `showInterstitialIfEligible(onComplete?)` es no-op para Plus/Pro
+- `App.tsx` — `AdProvider` añadido dentro de `PremiumProvider`
+
+### Puntos de activación (solo tier Free)
+- `ActiveWorkoutScreen.tsx` — `handleFinish`: guarda sesión en SQLite → muestra anuncio → navega a WorkoutSummary en el callback de cierre (datos seguros antes del anuncio)
+- `PlanningHomeScreen.tsx` — `handleGenerate`: genera planning → muestra anuncio sin callback (bonus tras la acción, no bloquea)
+
+### Argumentos de venta en el Paywall
+- `PaywallScreen.tsx` — array `FREE_FEATURES` creado con limitaciones del tier gratuito incluyendo "Anuncios entre acciones" (destacado en amarillo); sección "Plan gratuito actual" reemplaza el texto estático; "Sin anuncios" en PLUS_FEATURES; "Sin anuncios, nunca" en PRO_FEATURES
+- `PremiumGate.tsx` — subtitle Plus menciona eliminación de anuncios
+
+### Reglas de negocio implementadas
+- Nunca durante el entrenamiento activo (solo tras finalizar)
+- Nunca en el Onboarding
+- Nunca a usuarios Plus o Pro
+- Máximo 1 anuncio cada 3 minutos (`lastAdShownAt` ref)
+- El anuncio aparece siempre después de la acción, nunca antes
+
+---
+
+## Pendiente de configuración manual (fuera del código)
+
+### RevenueCat
+- [ ] Crear cuenta en revenuecat.com (gratuito)
+- [ ] Configurar productos en Google Play Console: `fittrack_plus_lifetime`, `fittrack_pro_annual`
+- [ ] Configurar entitlements en RevenueCat: `fittrack_plus`, `fittrack_pro`
+- [ ] Reemplazar key de test `RC_API_KEY_ANDROID` en `PremiumContext.tsx` con clave real del dashboard
+- [ ] (Opcional) Configurar en App Store Connect si se lanza en iOS
+
+### AdMob
+- [ ] `react-native-google-mobile-ads` requiere build nativo — no funciona en Expo Go
+- [ ] Testear con `npx expo run:android` o EAS Build (`eas build --profile development`)
+- [ ] Implementar UMP (User Messaging Platform) para consentimiento GDPR — pendiente Sprint 4
+
+---
+
+## Siguiente paso: Auditoría nº 2

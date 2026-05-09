@@ -13,6 +13,8 @@ import { VolumeChart } from '@/components/workout/VolumeChart';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useWorkoutProgress } from '@/hooks/useWorkoutProgress';
 import { useTheme } from '@/context/ThemeContext';
+import { useTierLimits } from '@/hooks/useTierLimits';
+import { usePaywall } from '@/hooks/usePaywall';
 import { fromTimestamp } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
@@ -24,6 +26,7 @@ const METRICS: Array<{ key: VolumeMetric; label: string; unit: string }> = [
   { key: 'maxWeightKg', label: 'Peso máximo', unit: 'kg' },
   { key: 'totalVolumeKg', label: 'Volumen', unit: 'kg' },
   { key: 'totalReps', label: 'Repeticiones', unit: 'reps' },
+  { key: 'estimatedOneRM', label: '1RM estimado', unit: 'kg' },
 ];
 
 export function ExerciseHistoryScreen({ route }: Props) {
@@ -31,6 +34,9 @@ export function ExerciseHistoryScreen({ route }: Props) {
   const { colors } = useTheme();
   const { progressPoints, recentSessions, isLoading } = useWorkoutProgress(exerciseId);
   const [metric, setMetric] = useState<VolumeMetric>('maxWeightKg');
+  const limits = useTierLimits();
+  const { openPaywall } = usePaywall();
+  const availableMetrics = METRICS.slice(0, limits.exerciseGraphMetrics);
 
   const formatDate = (ts: number) =>
     fromTimestamp(ts).toLocaleDateString('es-ES', {
@@ -84,15 +90,17 @@ export function ExerciseHistoryScreen({ route }: Props) {
         <View style={styles.toggleRow}>
           {METRICS.map(m => {
             const active = metric === m.key;
+            const isLocked = !availableMetrics.find(am => am.key === m.key);
             return (
               <Pressable
                 key={m.key}
                 style={[
                   styles.toggleBtn,
                   { borderColor: colors.border, backgroundColor: colors.surface },
-                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  active && !isLocked && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  isLocked && { opacity: 0.5 },
                 ]}
-                onPress={() => setMetric(m.key)}
+                onPress={() => isLocked ? openPaywall('plus') : setMetric(m.key)}
               >
                 <Text
                   style={[

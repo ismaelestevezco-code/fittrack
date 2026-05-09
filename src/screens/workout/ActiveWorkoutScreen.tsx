@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,16 @@ import { formatDuration } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
 import type { ExerciseCategoryRow, ExerciseRow, SetLogRow } from '@/types/database.types';
+import {
+  setupTimerNotificationCategory,
+  startTimerNotifications,
+  updateTimerNotification,
+  finishTimerNotifications,
+  cancelTimerNotifications,
+  registerPauseCallback,
+  unregisterPauseCallback,
+} from '@/utils/timerNotification';
+import { useAds } from '@/context/AdContext';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ActiveWorkout'>;
 
@@ -36,6 +46,7 @@ interface CollapsibleCategorySectionProps {
   onUpdate: (setLogId: number, reps: number, weight: number) => void;
   onDelete: (setLogId: number) => void;
   onAddSet: (exerciseId: number) => void;
+  onSetComplete?: (restSeconds: number) => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }
 
@@ -48,6 +59,7 @@ function CollapsibleCategorySection({
   onUpdate,
   onDelete,
   onAddSet,
+  onSetComplete,
   colors,
 }: CollapsibleCategorySectionProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -118,9 +130,11 @@ function CollapsibleCategorySection({
                     targetReps={exercise.target_reps}
                     targetWeight={prevLog?.weight_kg ?? exercise.target_weight_kg}
                     loggedSet={loggedSet}
+                    restSeconds={exercise.rest_seconds}
                     onLog={(reps, weight) => onLog(exercise, setNumber, reps, weight)}
                     onUpdate={onUpdate}
                     onDelete={onDelete}
+                    onComplete={onSetComplete}
                   />
                 );
               })}
@@ -163,12 +177,16 @@ function formatCountdown(ms: number) {
   return `${pad2(min)}:${pad2(sec)},${pad2(cs)}`;
 }
 
+interface TimerPanelHandle {
+  startCountdown: (seconds: number) => void;
+}
+
 interface TimerPanelProps {
   elapsedSeconds: number;
   colors: ReturnType<typeof useTheme>['colors'];
 }
 
-function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
+const TimerPanel = forwardRef<TimerPanelHandle, TimerPanelProps>(function TimerPanel({ elapsedSeconds, colors }, ref) {
   const [tab, setTab] = useState<TimerTab>('session');
 
   // Stopwatch state
@@ -188,6 +206,8 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
   const [cdSetMin, setCdSetMin] = useState('1');
   const [cdSetSec, setCdSetSec] = useState('30');
   const [cdSetting, setCdSetting] = useState(false);
+  const lastNotifUpdateRef = useRef(0);
+  const notifPermittedRef = useRef<boolean | null>(null);
 
   // Stopwatch controls
   const swToggle = useCallback(() => {
@@ -214,15 +234,25 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
   }, []);
 
   // Countdown controls
-  const cdToggle = useCallback(() => {
+  const cdToggle = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (cdMs <= 0) return;
     if (cdRunning) {
       if (cdRef.current) clearInterval(cdRef.current);
       cdBaseRef.current = cdMs;
       setCdRunning(false);
+      cancelTimerNotifications();
     } else {
+      // Request permissions once and set up category
+      if (notifPermittedRef.current === null) {
+        notifPermittedRef.current = await setupTimerNotificationCategory();
+      }
       cdStartRef.current = Date.now();
+      lastNotifUpdateRef.current = Date.now();
+      const startRemaining = cdBaseRef.current;
+      if (notifPermittedRef.current) {
+        startTimerNotifications(startRemaining);
+      }
       cdRef.current = setInterval(() => {
         const remaining = cdBaseRef.current - (Date.now() - cdStartRef.current);
         if (remaining <= 0) {
@@ -230,8 +260,16 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
           setCdMs(0);
           setCdRunning(false);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          if (notifPermittedRef.current) {
+            finishTimerNotifications();
+          }
         } else {
           setCdMs(remaining);
+          // Update notification every second so the countdown ticks live
+          if (notifPermittedRef.current && Date.now() - lastNotifUpdateRef.current >= 1000) {
+            lastNotifUpdateRef.current = Date.now();
+            updateTimerNotification(remaining);
+          }
         }
       }, 10);
       setCdRunning(true);
@@ -244,6 +282,7 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
     setCdMs(cdTotalMs);
     cdBaseRef.current = cdTotalMs;
     setCdRunning(false);
+    cancelTimerNotifications();
   }, [cdTotalMs]);
 
   const cdApplySet = useCallback(() => {
@@ -252,6 +291,7 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
     const ms = (min * 60 + sec) * 1000;
     if (ms <= 0) return;
     if (cdRef.current) clearInterval(cdRef.current);
+    cancelTimerNotifications();
     setCdTotalMs(ms);
     setCdMs(ms);
     cdBaseRef.current = ms;
@@ -259,10 +299,64 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
     setCdSetting(false);
   }, [cdSetMin, cdSetSec]);
 
+  // Register "Pausar" callback so notification action pauses the timer at its current position
+  useEffect(() => {
+    registerPauseCallback(() => {
+      if (cdRef.current) clearInterval(cdRef.current);
+      const remaining = Math.max(0, cdBaseRef.current - (Date.now() - cdStartRef.current));
+      cdBaseRef.current = remaining;
+      setCdMs(remaining);
+      setCdRunning(false);
+      cancelTimerNotifications();
+    });
+    return () => unregisterPauseCallback();
+  }, []);
+
+  // Expose startCountdown to parent via ref
+  useImperativeHandle(ref, () => ({
+    startCountdown: (seconds: number) => {
+      if (cdRef.current) clearInterval(cdRef.current);
+      cancelTimerNotifications();
+      const ms = seconds * 1000;
+      cdBaseRef.current = ms;
+      cdStartRef.current = Date.now();
+      lastNotifUpdateRef.current = Date.now();
+      setCdTotalMs(ms);
+      setCdMs(ms);
+      setTab('countdown');
+      cdRef.current = setInterval(() => {
+        const remaining = cdBaseRef.current - (Date.now() - cdStartRef.current);
+        if (remaining <= 0) {
+          if (cdRef.current) clearInterval(cdRef.current);
+          setCdMs(0);
+          setCdRunning(false);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          if (notifPermittedRef.current) finishTimerNotifications();
+        } else {
+          setCdMs(remaining);
+          if (notifPermittedRef.current && Date.now() - lastNotifUpdateRef.current >= 1000) {
+            lastNotifUpdateRef.current = Date.now();
+            updateTimerNotification(remaining);
+          }
+        }
+      }, 10);
+      setCdRunning(true);
+      if (notifPermittedRef.current === null) {
+        setupTimerNotificationCategory().then(permitted => {
+          notifPermittedRef.current = permitted;
+          if (permitted) startTimerNotifications(ms);
+        });
+      } else if (notifPermittedRef.current) {
+        startTimerNotifications(ms);
+      }
+    },
+  }), []);
+
   useEffect(() => {
     return () => {
       if (swRef.current) clearInterval(swRef.current);
       if (cdRef.current) clearInterval(cdRef.current);
+      cancelTimerNotifications();
     };
   }, []);
 
@@ -398,7 +492,7 @@ function TimerPanel({ elapsedSeconds, colors }: TimerPanelProps) {
       )}
     </View>
   );
-}
+});
 
 const timerStyles = StyleSheet.create({
   container: {
@@ -481,6 +575,7 @@ export function ActiveWorkoutScreen({ navigation, route }: Props) {
     getDayCategories,
   } = useWorkoutStore();
 
+  const { showInterstitialIfEligible } = useAds();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [finishing, setFinishing] = useState(false);
@@ -490,6 +585,7 @@ export function ActiveWorkoutScreen({ navigation, route }: Props) {
   const [categories, setCategories] = useState<ExerciseCategoryRow[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingRemoveRef = useRef<(() => void) | null>(null);
+  const timerPanelRef = useRef<TimerPanelHandle>(null);
 
   useEffect(() => {
     loadSession(sessionId).then(async () => {
@@ -565,17 +661,24 @@ export function ActiveWorkoutScreen({ navigation, route }: Props) {
     setExtraSets(prev => ({ ...prev, [exerciseId]: (prev[exerciseId] ?? 0) + 1 }));
   }, []);
 
+  const handleSetComplete = useCallback((restSeconds: number) => {
+    timerPanelRef.current?.startCountdown(restSeconds);
+  }, []);
+
   const handleFinish = useCallback(async () => {
     if (finishing) return;
     setFinishing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
+      // Guardar en DB primero; si el usuario cierra la app durante el anuncio los datos están seguros
       await finishSession(sessionId);
-      navigation.replace('WorkoutSummary', { sessionId });
+      showInterstitialIfEligible(() => {
+        navigation.replace('WorkoutSummary', { sessionId });
+      });
     } finally {
       setFinishing(false);
     }
-  }, [finishing, sessionId, finishSession, navigation, editMode]);
+  }, [finishing, sessionId, finishSession, navigation, showInterstitialIfEligible]);
 
   if (loading) {
     return (
@@ -613,7 +716,7 @@ export function ActiveWorkoutScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <TimerPanel elapsedSeconds={elapsedSeconds} colors={colors} />
+      <TimerPanel ref={timerPanelRef} elapsedSeconds={elapsedSeconds} colors={colors} />
 
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
         {groups.map(group => (
@@ -627,6 +730,7 @@ export function ActiveWorkoutScreen({ navigation, route }: Props) {
             onUpdate={handleUpdate}
             onDelete={handleDelete}
             onAddSet={handleAddSet}
+            onSetComplete={handleSetComplete}
             colors={colors}
           />
         ))}

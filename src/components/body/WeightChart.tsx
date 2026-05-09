@@ -9,6 +9,20 @@ import type { BodyWeightRow } from '@/types/database.types';
 
 const PAD = { top: 12, right: 12, bottom: 32, left: 44 };
 
+function linearRegression(points: { x: number; y: number }[]): { slope: number; intercept: number } | null {
+  const n = points.length;
+  if (n < 2) return null;
+  const sumX = points.reduce((s, p) => s + p.x, 0);
+  const sumY = points.reduce((s, p) => s + p.y, 0);
+  const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+  const sumX2 = points.reduce((s, p) => s + p.x * p.x, 0);
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return null;
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  return { slope, intercept };
+}
+
 type ChartPoint = { date: number; weight_kg: number };
 
 function aggregateWeekly(data: BodyWeightRow[]): ChartPoint[] {
@@ -106,6 +120,12 @@ export function WeightChart({ data, height = 200, goalWeight, viewMode = 'daily'
     .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(d.date).toFixed(1)},${toY(d.weight_kg).toFixed(1)}`)
     .join(' ');
 
+  const trend = chartPoints.length >= 3
+    ? linearRegression(chartPoints.map(p => ({ x: p.date, y: p.weight_kg })))
+    : null;
+  const trendStart = trend ? trend.slope * minDate + trend.intercept : 0;
+  const trendEnd = trend ? trend.slope * maxDate + trend.intercept : 0;
+
   const yLabels = Array.from({ length: 4 }, (_, i) => {
     const w = minW + (rawRange / 3) * i;
     return { value: w, y: toY(w) };
@@ -171,6 +191,19 @@ export function WeightChart({ data, height = 200, goalWeight, viewMode = 'daily'
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+
+            {trend && (
+              <Line
+                x1={toX(minDate).toFixed(1)}
+                y1={toY(trendStart).toFixed(1)}
+                x2={toX(maxDate).toFixed(1)}
+                y2={toY(trendEnd).toFixed(1)}
+                stroke={colors.textSecondary}
+                strokeWidth={1.5}
+                strokeDasharray="5,4"
+                opacity={0.55}
+              />
+            )}
 
             {chartPoints.map((d, i) => {
               const cx = toX(d.date);

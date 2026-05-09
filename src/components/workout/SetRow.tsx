@@ -10,9 +10,11 @@ interface SetRowProps {
   targetReps: number;
   targetWeight: number;
   loggedSet: SetLogRow | undefined;
+  restSeconds?: number;
   onLog: (reps: number, weight: number) => void;
   onUpdate: (setLogId: number, reps: number, weight: number) => void;
   onDelete: (setLogId: number) => void;
+  onComplete?: (restSeconds: number) => void;
 }
 
 export function SetRow({
@@ -20,9 +22,11 @@ export function SetRow({
   targetReps,
   targetWeight,
   loggedSet,
+  restSeconds = 90,
   onLog,
   onUpdate,
   onDelete,
+  onComplete,
 }: SetRowProps) {
   const { colors } = useTheme();
   const [reps, setReps] = useState(loggedSet?.reps_done ?? (targetReps > 0 ? targetReps : 10));
@@ -42,8 +46,9 @@ export function SetRow({
       onUpdate(loggedSet.id, reps, weight);
     } else {
       onLog(reps, weight);
+      onComplete?.(restSeconds);
     }
-  }, [isLogged, loggedSet, reps, weight, onLog, onUpdate]);
+  }, [isLogged, loggedSet, reps, weight, onLog, onUpdate, onComplete, restSeconds]);
 
   const handleDelete = useCallback(() => {
     if (loggedSet) onDelete(loggedSet.id);

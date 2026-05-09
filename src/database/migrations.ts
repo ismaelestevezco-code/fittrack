@@ -102,6 +102,17 @@ const MIGRATIONS: Migration[] = [
       } catch { /* column already exists */ }
     },
   },
+  {
+    version: 7,
+    description: 'Añade measurement_frequency al perfil para frecuencia de registro de medidas',
+    up: async (db: SQLiteDatabase) => {
+      try {
+        await db.execAsync(
+          `ALTER TABLE profile ADD COLUMN measurement_frequency TEXT NOT NULL DEFAULT 'monthly';`,
+        );
+      } catch { /* column already exists in fresh installs */ }
+    },
+  },
 ];
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {

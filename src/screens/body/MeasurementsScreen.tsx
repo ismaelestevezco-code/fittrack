@@ -13,8 +13,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '@/components/common/Button';
 import { NumberInput } from '@/components/common/NumberInput';
 import { MeasurementRow } from '@/components/body/MeasurementRow';
+import { PremiumGate } from '@/components/common/PremiumGate';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useBodyStore } from '@/stores/bodyStore';
+import { useProfileStore } from '@/stores/profileStore';
 import { useTheme } from '@/context/ThemeContext';
 import { toDayTimestamp, fromTimestamp } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
@@ -55,6 +57,25 @@ const DEFAULT_VALUES: FormValues = {
   right_leg_cm: 55,
 };
 
+const DISABLED_FORM: FormEnabled = {
+  chest_cm: false,
+  waist_cm: false,
+  hips_cm: false,
+  left_arm_cm: false,
+  right_arm_cm: false,
+  left_leg_cm: false,
+  right_leg_cm: false,
+};
+
+// Returns Monday of the ISO week containing `date`
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const dow = d.getDay() === 0 ? 7 : d.getDay(); // 1=Mon … 7=Sun
+  d.setDate(d.getDate() - (dow - 1));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function getMonthStart(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
@@ -64,21 +85,28 @@ function formatMonth(date: Date): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
+function formatWeek(date: Date): string {
+  const end = new Date(date);
+  end.setDate(end.getDate() + 6);
+  const start = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const endStr = end.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  return `${start} – ${endStr}`;
+}
+
 export function MeasurementsScreen({ navigation: _navigation }: Props) {
   const { colors } = useTheme();
   const { measurements, isLoading, loadMeasurements, saveMeasurement } = useBodyStore();
+  const { profile } = useProfileStore();
 
-  const [selectedMonth, setSelectedMonth] = useState(() => getMonthStart(new Date()));
+  const isWeekly = (profile?.measurement_frequency ?? 'monthly') === 'weekly';
+
+  // Selected period anchor: first day of the month (monthly) or Monday of the week (weekly)
+  const [selectedPeriod, setSelectedPeriod] = useState<Date>(() =>
+    isWeekly ? getWeekStart(new Date()) : getMonthStart(new Date()),
+  );
+
   const [formValues, setFormValues] = useState<FormValues>({ ...DEFAULT_VALUES });
-  const [formEnabled, setFormEnabled] = useState<FormEnabled>({
-    chest_cm: false,
-    waist_cm: false,
-    hips_cm: false,
-    left_arm_cm: false,
-    right_arm_cm: false,
-    left_leg_cm: false,
-    right_leg_cm: false,
-  });
+  const [formEnabled, setFormEnabled] = useState<FormEnabled>({ ...DISABLED_FORM });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -86,47 +114,52 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
     loadMeasurements();
   }, []);
 
-  const currentMonthTs = toDayTimestamp(selectedMonth);
-  const todayMonthTs = toDayTimestamp(getMonthStart(new Date()));
+  // Re-anchor when the frequency setting changes
+  useEffect(() => {
+    setSelectedPeriod(isWeekly ? getWeekStart(new Date()) : getMonthStart(new Date()));
+  }, [isWeekly]);
 
-  const existingRecord = measurements.find(m => m.date === currentMonthTs);
+  const currentTs = toDayTimestamp(selectedPeriod);
+  const todayPeriodTs = toDayTimestamp(
+    isWeekly ? getWeekStart(new Date()) : getMonthStart(new Date()),
+  );
+
+  const existingRecord = measurements.find(m => m.date === currentTs);
 
   useEffect(() => {
     if (existingRecord) {
-      const newEnabled: FormEnabled = { ...formEnabled };
-      const newValues: FormValues = { ...formValues };
+      const newEnabled: FormEnabled = { ...DISABLED_FORM };
+      const newValues: FormValues = { ...DEFAULT_VALUES };
       FIELDS.forEach(f => {
         const val = existingRecord[f.key];
         if (val !== null && val !== undefined) {
           newEnabled[f.key] = true;
           newValues[f.key] = val;
-        } else {
-          newEnabled[f.key] = false;
         }
       });
       setFormEnabled(newEnabled);
       setFormValues(newValues);
     } else {
-      setFormEnabled({
-        chest_cm: false,
-        waist_cm: false,
-        hips_cm: false,
-        left_arm_cm: false,
-        right_arm_cm: false,
-        left_leg_cm: false,
-        right_leg_cm: false,
-      });
+      setFormEnabled({ ...DISABLED_FORM });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthTs, existingRecord?.id]);
+  }, [currentTs, existingRecord?.id]);
 
-  const handleMonthChange = useCallback((delta: number) => {
-    setSelectedMonth(prev => {
-      const next = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
-      const todayMonth = getMonthStart(new Date());
-      return next > todayMonth ? todayMonth : next;
+  const handlePeriodChange = useCallback((delta: number) => {
+    setSelectedPeriod(prev => {
+      let next: Date;
+      if (isWeekly) {
+        next = new Date(prev);
+        next.setDate(next.getDate() + delta * 7);
+        const todayWeek = getWeekStart(new Date());
+        return next > todayWeek ? todayWeek : next;
+      } else {
+        next = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
+        const todayMonth = getMonthStart(new Date());
+        return next > todayMonth ? todayMonth : next;
+      }
     });
-  }, []);
+  }, [isWeekly]);
 
   const toggleField = useCallback((key: MeasurementField) => {
     setFormEnabled(prev => ({ ...prev, [key]: !prev[key] }));
@@ -143,7 +176,7 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
     setError('');
     try {
       const input: UpsertMeasurementInput = {
-        date: currentMonthTs,
+        date: currentTs,
         chest_cm: formEnabled.chest_cm ? formValues.chest_cm : null,
         waist_cm: formEnabled.waist_cm ? formValues.waist_cm : null,
         hips_cm: formEnabled.hips_cm ? formValues.hips_cm : null,
@@ -158,7 +191,7 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [saving, formEnabled, formValues, currentMonthTs, saveMeasurement]);
+  }, [saving, formEnabled, formValues, currentTs, saveMeasurement]);
 
   if (isLoading && measurements.length === 0) {
     return (
@@ -171,44 +204,61 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
   }
 
   const sorted = [...measurements].sort((a, b) => b.date - a.date);
-  const historyItems = sorted.filter(m => m.date !== currentMonthTs);
+  const historyItems = sorted.filter(m => m.date !== currentTs);
+
+  const periodLabel = isWeekly
+    ? formatWeek(selectedPeriod)
+    : formatMonth(selectedPeriod);
+
+  const periodSectionLabel = isWeekly ? 'Semana' : 'Mes';
+
+  const updateBadgeText = isWeekly
+    ? 'Actualizando medidas de esta semana'
+    : 'Actualizando medidas del mes';
+
+  const hintText = isWeekly
+    ? 'Frecuencia: semanal (cámbiala en Ajustes)'
+    : 'Frecuencia: mensual (cámbiala en Ajustes)';
 
   return (
+    <PremiumGate requiredTier="plus" feature="Medidas corporales">
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Period selector */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Mes</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{periodSectionLabel}</Text>
           <View style={styles.monthRow}>
-            <Pressable onPress={() => handleMonthChange(-1)} hitSlop={8} style={styles.arrow}>
+            <Pressable onPress={() => handlePeriodChange(-1)} hitSlop={8} style={styles.arrow}>
               <MaterialCommunityIcons name="chevron-left" size={24} color={colors.textPrimary} />
             </Pressable>
-            <Text style={[styles.monthText, { color: colors.textPrimary }]}>{formatMonth(selectedMonth)}</Text>
+            <Text style={[styles.monthText, { color: colors.textPrimary }]}>{periodLabel}</Text>
             <Pressable
-              onPress={() => handleMonthChange(1)}
-              disabled={currentMonthTs >= todayMonthTs}
+              onPress={() => handlePeriodChange(1)}
+              disabled={currentTs >= todayPeriodTs}
               hitSlop={8}
-              style={[styles.arrow, currentMonthTs >= todayMonthTs && styles.arrowDisabled]}
+              style={[styles.arrow, currentTs >= todayPeriodTs && styles.arrowDisabled]}
             >
               <MaterialCommunityIcons
                 name="chevron-right"
                 size={24}
-                color={currentMonthTs >= todayMonthTs ? colors.textHint : colors.textPrimary}
+                color={currentTs >= todayPeriodTs ? colors.textHint : colors.textPrimary}
               />
             </Pressable>
           </View>
           {existingRecord && (
             <View style={[styles.existingBadge, { backgroundColor: `${colors.warning}1A` }]}>
               <MaterialCommunityIcons name="pencil" size={12} color={colors.warning} />
-              <Text style={[styles.existingText, { color: colors.warning }]}>Actualizando medidas del mes</Text>
+              <Text style={[styles.existingText, { color: colors.warning }]}>{updateBadgeText}</Text>
             </View>
           )}
-          <Text style={[styles.hint, { color: colors.textHint }]}>Recomendamos registrar una vez al mes</Text>
+          <Text style={[styles.hint, { color: colors.textHint }]}>{hintText}</Text>
         </View>
 
+        {/* Measurement fields */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             Medidas (cm) — selecciona las que quieras registrar
@@ -266,18 +316,18 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
           <EmptyState
             icon="tape-measure"
             title="Sin historial"
-            description="Los registros de meses anteriores aparecerán aquí."
+            description="Los registros anteriores aparecerán aquí."
           />
         ) : (
           historyItems.map((record, i) => {
             const prev = historyItems[i + 1];
             const visibleFields = FIELDS.filter(f => record[f.key] !== null);
             if (visibleFields.length === 0) return null;
+            const recordDate = fromTimestamp(record.date);
+            const label = isWeekly ? formatWeek(recordDate) : formatMonth(recordDate);
             return (
               <View key={record.id} style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.historyMonth, { color: colors.textPrimary }]}>
-                  {formatMonth(fromTimestamp(record.date))}
-                </Text>
+                <Text style={[styles.historyMonth, { color: colors.textPrimary }]}>{label}</Text>
                 {visibleFields.map(f => (
                   <MeasurementRow
                     key={f.key}
@@ -292,6 +342,7 @@ export function MeasurementsScreen({ navigation: _navigation }: Props) {
         )}
       </ScrollView>
     </SafeAreaView>
+    </PremiumGate>
   );
 }
 
@@ -328,8 +379,10 @@ const styles = StyleSheet.create({
   arrow: { padding: Spacing[2] },
   arrowDisabled: { opacity: 0.4 },
   monthText: {
-    fontSize: Typography.fontSize.lg,
+    fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semibold,
+    flex: 1,
+    textAlign: 'center',
   },
   existingBadge: {
     flexDirection: 'row',

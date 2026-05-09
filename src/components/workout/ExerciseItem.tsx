@@ -14,6 +14,9 @@ interface ExerciseItemProps {
   // Badge de progreso opcional
   badge?: 'pr' | 'improved' | 'same' | null;
   badgeText?: string;
+  // Datos de la última sesión
+  lastWeight?: number;
+  isPR?: boolean;
 }
 
 export function ExerciseItem({
@@ -24,18 +27,21 @@ export function ExerciseItem({
   rightAction,
   badge,
   badgeText,
+  lastWeight,
+  isPR,
 }: ExerciseItemProps) {
   const { colors } = useTheme();
 
   const handlePress = useCallback(() => onPress?.(exercise.id), [exercise.id, onPress]);
   const handleLongPress = useCallback(() => onLongPress?.(exercise.id), [exercise.id, onLongPress]);
 
-  const badgeConfig = badge
+  const effectiveBadge = isPR ? 'pr' : badge;
+  const badgeConfig = effectiveBadge
     ? {
         pr: { bg: `${colors.accent}1A`, color: colors.accent, text: badgeText ?? '↑ PR' },
         improved: { bg: `${colors.primary}1A`, color: colors.primary, text: badgeText ?? '+?' },
         same: { bg: `${colors.warning}1A`, color: colors.warning, text: 'Igual' },
-      }[badge]
+      }[effectiveBadge]
     : null;
 
   return (
@@ -58,6 +64,11 @@ export function ExerciseItem({
           {exercise.target_sets} × {exercise.target_reps > 0 ? `${exercise.target_reps} reps` : '— reps'}
           {exercise.target_weight_kg > 0 ? ` · ${exercise.target_weight_kg} kg` : ''}
         </Text>
+        {lastWeight != null && lastWeight > 0 && (
+          <Text style={[styles.lastWeight, { color: colors.textHint }]}>
+            Última: {lastWeight} kg
+          </Text>
+        )}
         {exercise.notes && (
           <Text style={[styles.notes, { color: colors.textHint }]} numberOfLines={1}>
             {exercise.notes}
@@ -103,6 +114,9 @@ const styles = StyleSheet.create({
   notes: {
     fontSize: Typography.fontSize.caption,
     fontStyle: 'italic',
+  },
+  lastWeight: {
+    fontSize: Typography.fontSize.caption,
   },
   right: {
     flexDirection: 'row',

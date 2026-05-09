@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,7 +12,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '@/components/common/Button';
 import { NumberInput } from '@/components/common/NumberInput';
 import { useProfileStore } from '@/stores/profileStore';
-import { useWorkoutStore } from '@/stores/workoutStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/context/ThemeContext';
 import { Gradients, Layout, Spacing, Typography } from '@/constants/theme';
@@ -21,6 +19,7 @@ import type { OnboardingStackParamList } from '@/types/navigation.types';
 import type { ProfileRow } from '@/types/database.types';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'GoalSetup'>;
+type Nav = Props['navigation'];
 type Goal = ProfileRow['goal'];
 type Experience = ProfileRow['experience_level'];
 type Equipment = ProfileRow['equipment'];
@@ -81,43 +80,30 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
   );
 }
 
-export function GoalSetupScreen({ navigation: _navigation }: Props) {
+export function GoalSetupScreen({ navigation }: Props) {
   const { colors } = useTheme();
-  const { pendingSetup, createProfile } = useProfileStore();
-  const { createRoutine } = useWorkoutStore();
+  const { pendingSetup, setPendingSetup } = useProfileStore();
 
   const [goal, setGoal] = useState<Goal>('lose_weight');
   const [experience, setExperience] = useState<Experience>('beginner');
   const [availableDays, setAvailableDays] = useState(3);
   const [equipment, setEquipment] = useState<Equipment>('full_gym');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const saving = false;
 
-  const handleStart = useCallback(async () => {
+  const handleStart = useCallback(() => {
     if (saving) return;
-    setSaving(true);
-    setError('');
-    try {
-      await createProfile({
-        name: pendingSetup.name ?? '',
-        age: pendingSetup.age ?? 25,
-        height_cm: pendingSetup.height_cm ?? 170,
-        sex: pendingSetup.sex ?? 'other',
-        initial_weight_kg: pendingSetup.initial_weight_kg ?? 70,
-        goal,
-        experience_level: experience,
-        available_days: availableDays,
-        equipment,
-        units: 'metric',
-        weighing_mode: 'daily',
-        weighing_days: '[]',
-      });
-      await createRoutine('Mi primera rutina');
-    } catch {
-      setError('Error al guardar el perfil. Por favor intenta de nuevo.');
-      setSaving(false);
-    }
-  }, [saving, createProfile, pendingSetup, goal, experience, availableDays, equipment, createRoutine]);
+    setPendingSetup({
+      goal,
+      experience_level: experience,
+      available_days: availableDays,
+      equipment,
+      units: 'metric',
+      weighing_mode: 'daily',
+      weighing_days: '[]',
+      measurement_frequency: 'monthly',
+    });
+    navigation.navigate('TemplateSelection');
+  }, [saving, setPendingSetup, goal, experience, availableDays, equipment, navigation]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -230,16 +216,7 @@ export function GoalSetupScreen({ navigation: _navigation }: Props) {
           })}
         </View>
 
-        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-
-        {saving ? (
-          <View style={styles.loadingBtn}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Guardando...</Text>
-          </View>
-        ) : (
-          <Button label="¡Comenzar!" onPress={handleStart} style={styles.cta} />
-        )}
+        <Button label="¡Comenzar!" onPress={handleStart} style={styles.cta} />
       </ScrollView>
     </SafeAreaView>
   );

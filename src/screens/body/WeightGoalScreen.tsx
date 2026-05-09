@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '@/components/common/Button';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { NumberInput } from '@/components/common/NumberInput';
 import { useBodyStore } from '@/stores/bodyStore';
 import { useProfileStore } from '@/stores/profileStore';
@@ -66,12 +67,17 @@ export function WeightGoalScreen({ navigation }: Props) {
     return monthFirst < minDate ? new Date(minDate) : monthFirst;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [isLoading, setIsLoading] = useState(true);
   const [targetWeight, setTargetWeight] = useState(
     weightGoal?.target_weight_kg ?? Math.max(currentWeight - 5, 40),
   );
   const [targetDate, setTargetDate] = useState(initialTargetDate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
 
   const handleDateChange = useCallback(
     (delta: number) => {
@@ -129,6 +135,14 @@ export function WeightGoalScreen({ navigation }: Props) {
   }, [clearWeightGoal, navigation]);
 
   const rateColor = isHealthy ? colors.accent : colors.warning;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+        <LoadingSpinner />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>

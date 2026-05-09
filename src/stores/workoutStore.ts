@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { RoutineTemplate } from '@/constants/routineTemplates';
 import { routineRepository } from '@/repositories/RoutineRepository';
 import { exerciseRepository } from '@/repositories/ExerciseRepository';
 import { exerciseCategoryRepository } from '@/repositories/ExerciseCategoryRepository';
@@ -64,6 +65,7 @@ interface WorkoutState {
   renameCategory: (id: number, name: string) => Promise<void>;
   deleteCategory: (id: number) => Promise<void>;
   setExerciseCategory: (exerciseId: number, categoryId: number | null) => Promise<void>;
+  createRoutineFromTemplate: (template: RoutineTemplate) => Promise<void>;
 }
 
 export const useWorkoutStore = create<WorkoutState>()((set, get) => ({
@@ -415,5 +417,11 @@ export const useWorkoutStore = create<WorkoutState>()((set, get) => ({
   // Asigna o quita la categoría de un ejercicio
   setExerciseCategory: async (exerciseId, categoryId) => {
     await exerciseRepository.setCategory(exerciseId, categoryId);
+  },
+
+  // Crea una rutina completa desde una plantilla predefinida y recarga el estado activo
+  createRoutineFromTemplate: async (template) => {
+    await routineRepository.createFromTemplate(template.name, template.days);
+    await get().loadActiveRoutine();
   },
 }));

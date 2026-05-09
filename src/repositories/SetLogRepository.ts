@@ -114,6 +114,59 @@ export class SetLogRepository {
     const db = getDatabase();
     return db.getAllAsync<SetLogRow>('SELECT * FROM set_logs ORDER BY workout_session_id ASC, set_number ASC');
   }
+
+  // Peso máximo por ejercicio en la última sesión completada del día (para mostrar en DayDetailScreen)
+  async getLastSessionWeightsForDay(routineDayId: number): Promise<Record<number, number>> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<{ exercise_id: number; max_weight: number }>(
+      `SELECT sl.exercise_id, MAX(sl.weight_kg) as max_weight
+       FROM set_logs sl
+       JOIN workout_sessions ws ON ws.id = sl.workout_session_id
+       WHERE ws.routine_day_id = ? AND ws.finished_at IS NOT NULL
+         AND ws.id = (
+           SELECT id FROM workout_sessions
+           WHERE routine_day_id = ? AND finished_at IS NOT NULL
+           ORDER BY finished_at DESC LIMIT 1
+         )
+       GROUP BY sl.exercise_id`,
+      [routineDayId, routineDayId],
+    );
+    return Object.fromEntries(rows.map(r => [r.exercise_id, r.max_weight]));
+  }
+
+  // Peso máximo histórico por ejercicio (para detectar PRs)
+  async getAllTimeMaxWeightPerExercise(exerciseIds: number[]): Promise<Record<number, number>> {
+    if (exerciseIds.length === 0) return {};
+    const db = getDatabase();
+    const placeholders = exerciseIds.map(() => '?').join(', ');
+    const rows = await db.getAllAsync<{ exercise_id: number; max_weight: number }>(
+      `SELECT exercise_id, MAX(weight_kg) as max_weight FROM set_logs
+       WHERE exercise_id IN (${placeholders})
+       GROUP BY exercise_id`,
+      exerciseIds,
+    );
+    return Object.fromEntries(rows.map(r => [r.exercise_id, r.max_weight]));
+  }
+
+  // Ejercicios que batieron su récord de peso en la sesión dada (count + nombres)
+  async countPRsInSession(sessionId: number): Promise<{ count: number; exerciseNames: string[] }> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<{ exercise_name: string }>(
+      `SELECT DISTINCT e.name as exercise_name
+       FROM set_logs sl
+       JOIN exercises e ON e.id = sl.exercise_id
+       WHERE sl.workout_session_id = ?
+         AND sl.weight_kg > (
+           SELECT COALESCE(MAX(sl2.weight_kg), 0)
+           FROM set_logs sl2
+           JOIN workout_sessions ws2 ON ws2.id = sl2.workout_session_id
+           WHERE sl2.exercise_id = sl.exercise_id
+             AND ws2.id != sl.workout_session_id
+         )`,
+      [sessionId],
+    );
+    return { count: rows.length, exerciseNames: rows.map(r => r.exercise_name) };
+  }
 }
 
 export const setLogRepository = new SetLogRepository();

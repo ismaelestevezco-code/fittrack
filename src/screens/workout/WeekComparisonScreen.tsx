@@ -17,6 +17,8 @@ import { calculateWeeklyData } from '@/logic/progressCalculator';
 import type { WeekData } from '@/logic/progressCalculator';
 import { useTheme } from '@/context/ThemeContext';
 import { Layout, Spacing, Typography } from '@/constants/theme';
+import { useTierLimits } from '@/hooks/useTierLimits';
+import { usePaywall } from '@/hooks/usePaywall';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'WeekComparison'>;
@@ -26,7 +28,10 @@ const RANGES: Range[] = [4, 8, 12];
 
 export function WeekComparisonScreen({ navigation: _navigation }: Props) {
   const { colors } = useTheme();
-  const [range, setRange] = useState<Range>(8);
+  const limits = useTierLimits();
+  const { openPaywall } = usePaywall();
+  const availableRanges = limits.comparisonWeeks as Range[];
+  const [range, setRange] = useState<Range>(availableRanges[0] ?? 4);
   const [weekData, setWeekData] = useState<WeekData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [barWidth, setBarWidth] = useState(0);
@@ -56,20 +61,22 @@ export function WeekComparisonScreen({ navigation: _navigation }: Props) {
     <View style={styles.rangeRow}>
       {RANGES.map(r => {
         const active = range === r;
+        const isLocked = !availableRanges.includes(r);
         return (
           <Pressable
             key={r}
             style={[
               styles.rangeBtn,
               { borderColor: colors.border, backgroundColor: colors.surface },
-              active && { backgroundColor: colors.primary, borderColor: colors.primary },
+              active && !isLocked && { backgroundColor: colors.primary, borderColor: colors.primary },
+              isLocked && { opacity: 0.5 },
             ]}
-            onPress={() => handleRangeChange(r)}
+            onPress={() => isLocked ? openPaywall('plus') : handleRangeChange(r)}
           >
             <Text style={[
               styles.rangeBtnText,
               { color: colors.textSecondary },
-              active && { color: colors.background },
+              active && !isLocked && { color: colors.background },
             ]}>
               {r} sem.
             </Text>

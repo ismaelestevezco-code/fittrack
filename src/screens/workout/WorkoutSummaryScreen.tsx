@@ -17,6 +17,7 @@ import { useWorkoutStore } from '@/stores/workoutStore';
 import { useTheme } from '@/context/ThemeContext';
 import { formatDuration } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
+import { setLogRepository } from '@/repositories/SetLogRepository';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
 import type { ExerciseRow, SetLogRow } from '@/types/database.types';
 
@@ -82,6 +83,7 @@ export function WorkoutSummaryScreen({ navigation, route }: Props) {
 
   const [loading, setLoading] = useState(true);
   const [prevSets, setPrevSets] = useState<SetLogRow[]>([]);
+  const [prData, setPrData] = useState<{ count: number; exerciseNames: string[] }>({ count: 0, exerciseNames: [] });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -89,6 +91,8 @@ export function WorkoutSummaryScreen({ navigation, route }: Props) {
   useEffect(() => {
     const init = async () => {
       await loadSession(sessionId);
+      const count = await setLogRepository.countPRsInSession(sessionId);
+      setPrData(count);
       setLoading(false);
     };
     init();
@@ -154,7 +158,7 @@ export function WorkoutSummaryScreen({ navigation, route }: Props) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
         <View style={styles.heroSection}>
-          <MaterialCommunityIcons name="trophy" size={48} color={colors.warning} />
+          <MaterialCommunityIcons name="trophy" size={48} color={colors.accent} />
           <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
             ¡Entrenamiento completado!
           </Text>
@@ -165,6 +169,25 @@ export function WorkoutSummaryScreen({ navigation, route }: Props) {
           <StatCard value={`${totalVolume.toFixed(0)} kg`} label="Volumen" color="accent" />
           <StatCard value={String(totalSets)} label="Series" color="secondary" />
         </View>
+
+        {prData.count > 0 && (
+          <View style={[styles.prCard, { backgroundColor: `${colors.accent}15`, borderColor: `${colors.accent}40` }]}>
+            <MaterialCommunityIcons name="medal" size={28} color={colors.accent} />
+            <View style={styles.prTextCol}>
+              <Text style={[styles.prTitle, { color: colors.accent }]}>
+                {prData.count === 1 ? '¡Nuevo récord personal!' : `¡${prData.count} récords personales!`}
+              </Text>
+              <Text style={[styles.prSub, { color: colors.textSecondary }]}>
+                Hoy superaste tu mejor marca en {prData.count === 1 ? 'un ejercicio' : `${prData.count} ejercicios`}.
+              </Text>
+              {prData.count > 1 && (
+                <Text style={[styles.prNames, { color: colors.accent }]} numberOfLines={2}>
+                  {prData.exerciseNames.join(' · ')}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
 
         {activeExercises.length > 0 ? (
           <>
@@ -283,7 +306,32 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     gap: Spacing[3],
-    marginBottom: Spacing[6],
+    marginBottom: Spacing[4],
+  },
+  prCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+    borderWidth: 1,
+    borderRadius: Layout.cardRadius,
+    padding: Spacing[4],
+    marginBottom: Spacing[5],
+  },
+  prTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  prTitle: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  prSub: {
+    fontSize: Typography.fontSize.sm,
+  },
+  prNames: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+    marginTop: 2,
   },
   footer: {
     paddingHorizontal: Spacing[4],

@@ -1,9 +1,15 @@
 // Tipos de parámetros de navegación por pantalla
 
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+};
+
 export type OnboardingStackParamList = {
   Welcome: undefined;
   ProfileSetup: undefined;
   GoalSetup: undefined;
+  TemplateSelection: undefined;
 };
 
 export type WorkoutStackParamList = {
@@ -46,4 +52,5 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Onboarding: undefined;
   Main: undefined;
+  Paywall: { highlightTier?: 'plus' | 'pro' } | undefined;
 };

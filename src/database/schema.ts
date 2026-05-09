@@ -13,9 +13,10 @@ export const CREATE_TABLES_SQL = `
     available_days    INTEGER NOT NULL DEFAULT 3,
     equipment         TEXT NOT NULL CHECK(equipment IN ('full_gym', 'home_gym', 'no_equipment')),
     units             TEXT NOT NULL DEFAULT 'metric' CHECK(units IN ('metric', 'imperial')),
-    weighing_mode     TEXT NOT NULL DEFAULT 'daily' CHECK(weighing_mode IN ('daily', 'weekly', 'monthly')),
-    weighing_days     TEXT NOT NULL DEFAULT '[]',
-    avatar_uri        TEXT,
+    weighing_mode            TEXT NOT NULL DEFAULT 'daily' CHECK(weighing_mode IN ('daily', 'weekly', 'monthly')),
+    weighing_days            TEXT NOT NULL DEFAULT '[]',
+    measurement_frequency    TEXT NOT NULL DEFAULT 'monthly' CHECK(measurement_frequency IN ('weekly', 'monthly')),
+    avatar_uri               TEXT,
     created_at        INTEGER NOT NULL,
     updated_at        INTEGER NOT NULL
   );

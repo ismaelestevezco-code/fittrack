@@ -17,6 +17,7 @@ import { useWorkoutStore } from '@/stores/workoutStore';
 import { useTheme } from '@/context/ThemeContext';
 import { formatDayShort, fromTimestamp } from '@/utils/dateUtils';
 import { Layout, Spacing, Typography } from '@/constants/theme';
+import { setLogRepository } from '@/repositories/SetLogRepository';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
 import type { ExerciseRow, WorkoutSessionRow } from '@/types/database.types';
 
@@ -31,6 +32,8 @@ export function DayDetailScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [existingSession, setExistingSession] = useState<WorkoutSessionRow | null>(null);
+  const [lastWeights, setLastWeights] = useState<Record<number, number>>({});
+  const [allTimeMax, setAllTimeMax] = useState<Record<number, number>>({});
 
   const day = routineDays.find(d => d.id === routineDayId);
   const isRestDay = day?.is_rest_day === 1;
@@ -45,13 +48,24 @@ export function DayDetailScreen({ navigation, route }: Props) {
       if (cancelled) return;
       setExistingSession(session ?? null);
 
+      let data: ExerciseRow[];
       if (session?.finished_at != null) {
-        // Show exercises actually logged in this session (includes soft/hard deleted ones)
-        const data = await getSessionExercises(session.id);
-        if (!cancelled) { setExercises(data); setLoading(false); }
+        data = await getSessionExercises(session.id);
       } else {
-        const data = await getDayExercises(routineDayId);
-        if (!cancelled) { setExercises(data); setLoading(false); }
+        data = await getDayExercises(routineDayId);
+      }
+      if (cancelled) return;
+      setExercises(data);
+
+      // Load last-session weights and all-time PRs for non-rest days
+      const [lw, atm] = await Promise.all([
+        setLogRepository.getLastSessionWeightsForDay(routineDayId),
+        setLogRepository.getAllTimeMaxWeightPerExercise(data.map(e => e.id)),
+      ]);
+      if (!cancelled) {
+        setLastWeights(lw);
+        setAllTimeMax(atm);
+        setLoading(false);
       }
     };
     load();
@@ -137,13 +151,20 @@ export function DayDetailScreen({ navigation, route }: Props) {
           />
         ) : (
           <View style={[styles.exerciseList, { backgroundColor: colors.surface }]}>
-            {exercises.map(exercise => (
-              <ExerciseItem
-                key={exercise.id}
-                exercise={exercise}
-                onPress={handleExerciseHistory}
-              />
-            ))}
+            {exercises.map(exercise => {
+              const lw = lastWeights[exercise.id];
+              const atm = allTimeMax[exercise.id];
+              const isPR = lw != null && atm != null && lw > 0 && lw >= atm;
+              return (
+                <ExerciseItem
+                  key={exercise.id}
+                  exercise={exercise}
+                  onPress={handleExerciseHistory}
+                  lastWeight={lw}
+                  isPR={isPR}
+                />
+              );
+            })}
           </View>
         )}
           </>

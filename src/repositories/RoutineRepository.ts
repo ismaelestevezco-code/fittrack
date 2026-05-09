@@ -105,6 +105,64 @@ export class RoutineRepository {
     if (!routine) throw new Error('Rutina no encontrada');
     return routine;
   }
+
+  // Crea una rutina completa desde una plantilla, incluyendo todos sus días y ejercicios.
+  // Desactiva cualquier rutina activa previa antes de crear la nueva.
+  async createFromTemplate(
+    templateName: string,
+    days: Array<{
+      dayOfWeek: number;
+      name: string;
+      isRestDay: boolean;
+      exercises: Array<{
+        name: string;
+        targetSets: number;
+        targetReps: number;
+        targetWeightKg: number;
+        restSeconds: number;
+        notes?: string;
+      }>;
+    }>,
+  ): Promise<number> {
+    const db = getDatabase();
+    const now = Math.floor(Date.now() / 1000);
+
+    await db.runAsync(
+      'UPDATE routines SET is_active = 0, updated_at = ? WHERE is_active = 1',
+      [now],
+    );
+
+    const result = await db.runAsync(
+      'INSERT INTO routines (name, is_active, created_at, updated_at) VALUES (?, 1, ?, ?)',
+      [templateName, now, now],
+    );
+    const routineId = result.lastInsertRowId;
+
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
+      const dayResult = await db.runAsync(
+        `INSERT INTO routine_days (routine_id, day_of_week, name, is_rest_day, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [routineId, day.dayOfWeek, day.name, day.isRestDay ? 1 : 0, i, now],
+      );
+      const dayId = dayResult.lastInsertRowId;
+
+      if (!day.isRestDay) {
+        for (let j = 0; j < day.exercises.length; j++) {
+          const ex = day.exercises[j];
+          await db.runAsync(
+            `INSERT INTO exercises
+             (routine_day_id, name, target_sets, target_reps, target_weight_kg, rest_seconds, notes, sort_order, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [dayId, ex.name, ex.targetSets, ex.targetReps, ex.targetWeightKg,
+              ex.restSeconds, ex.notes ?? null, j, now, now],
+          );
+        }
+      }
+    }
+
+    return routineId;
+  }
 }
 
 export const routineRepository = new RoutineRepository();

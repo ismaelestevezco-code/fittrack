@@ -28,6 +28,7 @@ export function calculateExerciseProgress(
       maxWeightKg: Math.max(...workingSets.map(l => l.weight_kg)),
       totalVolumeKg: workingSets.reduce((sum, l) => sum + l.weight_kg * l.reps_done, 0),
       totalReps: workingSets.reduce((sum, l) => sum + l.reps_done, 0),
+      estimatedOneRM: getMax1RMFromSets(workingSets),
     });
   }
 
@@ -46,6 +47,20 @@ export interface WeekData {
   year: number;
   sessionsCompleted: number;
   totalVolumeKg: number;
+}
+
+// Estima el 1RM con la fórmula de Brzycki (válida para ≥1 rep y peso > 0)
+export function estimateOneRepMax(weightKg: number, reps: number): number {
+  if (reps <= 0 || weightKg <= 0) return 0;
+  if (reps === 1) return weightKg;
+  return weightKg / (1.0278 - 0.0278 * reps);
+}
+
+// Devuelve el mayor 1RM estimado de un conjunto de sets de una sesión
+export function getMax1RMFromSets(sets: SetLogRow[]): number {
+  const working = sets.filter(s => s.is_warmup === 0 && s.weight_kg > 0 && s.reps_done > 0);
+  if (working.length === 0) return 0;
+  return Math.max(...working.map(s => estimateOneRepMax(s.weight_kg, s.reps_done)));
 }
 
 // Agrega sesiones por semana ISO y calcula el volumen total de cada semana

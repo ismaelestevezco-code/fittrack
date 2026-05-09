@@ -17,6 +17,8 @@ import { Input } from '@/components/common/Input';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useWorkoutStore } from '@/stores/workoutStore';
 import { useTheme } from '@/context/ThemeContext';
+import { useTierLimits } from '@/hooks/useTierLimits';
+import { usePaywall } from '@/hooks/usePaywall';
 import { Layout, Spacing, Typography } from '@/constants/theme';
 import type { WorkoutStackParamList } from '@/types/navigation.types';
 import type { RoutineRow } from '@/types/database.types';
@@ -25,6 +27,8 @@ type Props = NativeStackScreenProps<WorkoutStackParamList, 'RoutineManager'>;
 
 export function RoutineManagerScreen({ navigation }: Props) {
   const { colors } = useTheme();
+  const limits = useTierLimits();
+  const { openPaywall } = usePaywall();
   const {
     allRoutines,
     isLoading,
@@ -205,6 +209,10 @@ export function RoutineManagerScreen({ navigation }: Props) {
         <Button
           label="Nueva rutina"
           onPress={() => {
+            if (allRoutines.length >= limits.maxRoutines) {
+              openPaywall('plus');
+              return;
+            }
             setNewName('');
             setNewNameError('');
             setShowNewModal(true);
